@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Team Tracker (Ver 9.2.4 - Complete Master Baseline)</title>
+    <title>Math Team Tracker (Ver 9 - Cloud Sync)</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.10/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,6 +25,7 @@
         const { useState, useEffect, useCallback } = React;
 
         // --- IMPORTANT CONFIGURATION ---
+        // I-paste dito ang nakuha mong Web App URL mula sa Google Apps Script Deployment
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw1-nYWa-rrdwDywuOwUERSk5_c8Epgp2M5LKp96oM1Rbvpz6q_tEqCMRnz02gvnq2YlQ/exec"; 
 
         const COMPONENTS = ["TB", "TWE", "Others"];
@@ -42,32 +43,41 @@
             const [users, setUsers] = useState(DEFAULT_USERS);
             const [projects, setProjects] = useState([]);
             const [currentUser, setCurrentUser] = useState("");
-            const [activeTab, setActiveTab] = useState("user-view"); 
+            const [activeTab, setActiveTab] = useState("user-view");
             const [isLoading, setIsLoading] = useState(true);
 
-            // Filter States for Master View (RESTORATION FROM V9)
-            const [selectedSeriesFilter, setSelectedSeriesFilter] = useState("ALL");
-            const [selectedStageFilter, setSelectedStageFilter] = useState("ALL");
+            // Report Tree expansion states
+            const [expandedSeries, setExpandedSeries] = useState({});
+            const [expandedComponents, setExpandedComponents] = useState({});
+            const [expandedStages, setExpandedStages] = useState({});
 
-            // Toggles & Modals
-            const [openArchiveLogs, setOpenArchiveLogs] = useState({});
+            const [lastHandOffAction, setLastHandOffAction] = useState(null);
+
+            // Modals
             const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
             const [isHandOffModalOpen, setIsHandOffModalOpen] = useState(false);
+            const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
             const [isParallelModalOpen, setIsParallelModalOpen] = useState(false);
+            const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-            // Forms State
+            // Forms Strategy
             const [seriesCreationMode, setSeriesCreationMode] = useState("new");
             const [newSeriesInput, setNewSeriesInput] = useState("");
             const [selectedExistingSeries, setSelectedExistingSeries] = useState("");
             const [selectedComponent, setSelectedComponent] = useState(COMPONENTS[0]);
             const [selectedStage, setSelectedStage] = useState(STAGES[0]);
             const [selectedLevel, setSelectedLevel] = useState(STAGE_LEVELS[STAGES[0]][0]);
+            const [newProjectStageColor, setNewProjectStageColor] = useState("Red");
             const [firstAssignee, setFirstAssignee] = useState("");
 
             const [handOffTarget, setHandOffTarget] = useState(null); 
             const [nextAssignee, setNextAssignee] = useState("");
             const [parallelTargetProjectId, setParallelTargetProjectId] = useState(null);
             const [parallelAssignee, setParallelAssignee] = useState("");
+            const [editTarget, setEditTarget] = useState(null); 
+            const [editTaskNameInput, setEditTaskNameInput] = useState("");
+            const [newMemberName, setNewMemberName] = useState("");
+            const [newMemberRole, setNewMemberRole] = useState("");
 
             const [definedTaskNames, setDefinedTaskNames] = useState({});
             const [toast, setToast] = useState(null);
@@ -77,6 +87,7 @@
                 setTimeout(() => setToast(null), 4000);
             };
 
+            // FETCH DATA FROM GOOGLE SHEETS
             const loadCloudData = useCallback(async (showToast = false) => {
                 if (SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE") {
                     setIsLoading(false);
@@ -90,34 +101,44 @@
                         setUsers(data.users);
                         if (!currentUser) setCurrentUser(data.users[0]);
                     }
-                    if (data.projects) setProjects(data.projects);
-                    if (showToast) triggerToast("🔄 System Database Synced!");
+                    if (data.projects) {
+                        setProjects(data.projects);
+                    }
+                    if (showToast) triggerToast("🔄 Data refreshed from Cloud Database.");
                 } catch (error) {
-                    console.error("Cloud Error:", error);
-                    triggerToast("❌ Sync failure.");
+                    console.error("Error reading cloud data:", error);
+                    triggerToast("❌ Connection error reading from cloud.");
                 } finally {
                     setIsLoading(false);
                 }
             }, [currentUser]);
 
+            // PUSH DATA TO GOOGLE SHEETS
             const syncToCloud = async (updatedProjects, updatedUsers) => {
                 if (SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE") return;
                 try {
                     await fetch(SCRIPT_URL, {
                         method: "POST",
-                        mode: "no-cors",
+                        mode: "no-cors", // Crucial for cross-origin Apps Script posting
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ action: "syncAll", projects: updatedProjects, users: updatedUsers })
+                        body: JSON.stringify({
+                            action: "syncAll",
+                            projects: updatedProjects,
+                            users: updatedUsers
+                        })
                     });
-                    triggerToast("☁️ Saved & Cloud Synced!");
+                    // Since no-cors doesn't allow reading response, we update state locally and assume success
+                    triggerToast("☁️ Saved & Synced successfully for all users!");
                 } catch (error) {
                     console.error("Cloud push failed:", error);
-                    triggerToast("❌ Saved locally, Cloud failed.");
+                    triggerToast("❌ Failed syncing changes to cloud.");
                 }
             };
 
+            // Initialize App
             useEffect(() => {
                 loadCloudData();
+                // Auto background check for updates every 30 seconds
                 const interval = setInterval(() => loadCloudData(false), 30000);
                 return () => clearInterval(interval);
             }, [loadCloudData]);
@@ -126,345 +147,773 @@
                 setSelectedLevel(STAGE_LEVELS[selectedStage][0]);
             }, [selectedStage]);
 
-            const getFormattedDateTime = () => new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true });
+            const existingSeriesList = Array.from(new Set(projects.map(p => p.series))).filter(Boolean);
 
-            const handleUnarchive = async (projectId) => {
-                const updated = projects.map(p => {
-                    if (p.id !== projectId) return p;
-                    return { ...p, isArchived: false, tasks: [{ id: `task-${Date.now()}`, name: "Restored Task Context Placeholder", status: "Pending Transfer", assignee: currentUser, startDate: null, endDate: null, isParallel: false }] };
-                });
-                setProjects(updated);
-                await syncToCloud(updated, users);
-                triggerToast("📂 Project restored to active tracking!");
+            useEffect(() => {
+                if (existingSeriesList.length > 0 && !selectedExistingSeries) {
+                    setSelectedExistingSeries(existingSeriesList[0]);
+                }
+            }, [existingSeriesList, selectedExistingSeries]);
+
+            const getFormattedDateTime = () => {
+                const options = { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
+                return new Date().toLocaleDateString('en-US', options);
+            };
+
+            const getFormattedDateOnly = () => {
+                const options = { year: 'numeric', month: 'short', day: '2-digit' };
+                return new Date().toLocaleDateString('en-US', options);
+            };
+
+            const handleAddMember = async (e) => {
+                e.preventDefault();
+                if (!newMemberName.trim() || !newMemberRole.trim()) return;
+                const formattedUserString = `${newMemberName.trim()} (${newMemberRole.trim()})`;
+                if (users.includes(formattedUserString)) {
+                    triggerToast("Member already exists!");
+                    return;
+                }
+                const newUsers = [...users, formattedUserString];
+                setUsers(newUsers);
+                setNewMemberName("");
+                setNewMemberRole("");
+                await syncToCloud(projects, newUsers);
+            };
+
+            const handleRemoveMember = async (userToRemove) => {
+                if (users.length <= 1) {
+                    triggerToast("Cannot empty the roster!");
+                    return;
+                }
+                const newUsers = users.filter(u => u !== userToRemove);
+                setUsers(newUsers);
+                await syncToCloud(projects, newUsers);
             };
 
             const handleReceiveAndStart = async (projectId, taskId) => {
                 const taskName = definedTaskNames[`${projectId}-${taskId}`];
-                if (!taskName || !taskName.trim()) { triggerToast("Please add a description!"); return; }
+                if (!taskName || !taskName.trim()) {
+                    triggerToast("Please define the task description context first!");
+                    return;
+                }
                 const now = getFormattedDateTime();
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
-                    return { ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, name: taskName.trim(), status: "In Progress", startDate: now } : t) };
+                    return {
+                        ...p,
+                        tasks: p.tasks.map(t => t.id === taskId ? { ...t, name: taskName.trim(), status: "In Progress", startDate: now } : t)
+                    };
                 });
-                setProjects(updated); await syncToCloud(updated, users);
+                const updatedObj = projects.find(p => p.id === projectId);
+                setProjects(updated);
+                await syncToCloud(updated, users);
+            };
+
+            const openEditTaskModal = (projectId, taskId, currentName) => {
+                setEditTarget({ projectId, taskId });
+                setEditTaskNameInput(currentName);
+                setIsEditModalOpen(true);
+            };
+
+            const saveEditedTaskName = async (e) => {
+                e.preventDefault();
+                if (!editTaskNameInput.trim() || !editTarget) return;
+                const updated = projects.map(p => {
+                    if (p.id !== editTarget.projectId) return p;
+                    return {
+                        ...p,
+                        tasks: p.tasks.map(t => t.id === editTarget.taskId ? { ...t, name: editTaskNameInput.trim() } : t)
+                    };
+                });
+                setProjects(updated);
+                setIsEditModalOpen(false);
+                setEditTarget(null);
+                await syncToCloud(updated, users);
             };
 
             const handleDoneClick = (projectId, taskId) => {
-                setHandOffTarget({ projectId, taskId }); setNextAssignee(users.find(u => u !== currentUser) || users[0]); setIsHandOffModalOpen(true);
+                setHandOffTarget({ projectId, taskId });
+                setNextAssignee(users.find(u => u !== currentUser) || users[0]);
+                setIsHandOffModalOpen(true);
             };
 
             const executeHandOff = async (e) => {
-                e.preventDefault(); if (!handOffTarget) return;
+                e.preventDefault();
+                if (!handOffTarget) return;
+
                 const { projectId, taskId } = handOffTarget;
-                const historyDate = getFormattedDateTime(); 
+                const historyDate = getFormattedDateOnly();
+                const timestamp = Date.now();
+                const nowFormatted = getFormattedDateTime();
+                let spawnedTaskId = null;
 
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
+
                     const targetTask = p.tasks.find(t => t.id === taskId);
-                    const completedTask = { ...targetTask, status: "Done", endDate: historyDate };
+                    const completedTask = { ...targetTask, status: "Done", endDate: historyDate, completedAtTimestamp: timestamp };
                     const remainingTasks = p.tasks.filter(t => t.id !== taskId);
                     const shouldSpawnNextPlaceholder = !targetTask.isParallel && remainingTasks.filter(r => !r.isParallel).length === 0;
 
                     let updatedTasks = remainingTasks;
                     if (shouldSpawnNextPlaceholder) {
-                        updatedTasks = [...remainingTasks, { id: `task-${Date.now()}`, name: "Awaiting task description...", status: "Pending Transfer", assignee: nextAssignee, startDate: null, endDate: null, isParallel: false }];
+                        spawnedTaskId = `task-${Date.now()}`;
+                        updatedTasks = [...remainingTasks, {
+                            id: spawnedTaskId, name: `Awaiting task description from the recipient... (Sent: ${nowFormatted})`, status: "Pending Transfer", assignee: nextAssignee, startDate: null, endDate: null, isParallel: false
+                        }];
                     }
+
+                    setLastHandOffAction({ projectId: p.id, originalTaskId: targetTask.id, spawnedTaskId: spawnedTaskId, sender: currentUser, recipient: nextAssignee });
                     return { ...p, tasks: updatedTasks, history: [completedTask, ...p.history] };
                 });
 
-                setProjects(updated); setIsHandOffModalOpen(false); setHandOffTarget(null); await syncToCloud(updated, users);
+                setProjects(updated);
+                setIsHandOffModalOpen(false);
+                setHandOffTarget(null);
+                await syncToCloud(updated, users);
+            };
+
+            const handleUndoHandOff = async () => {
+                if (!lastHandOffAction) return;
+                const { projectId, originalTaskId, spawnedTaskId } = lastHandOffAction;
+
+                const updated = projects.map(p => {
+                    if (p.id !== projectId) return p;
+                    const mistakenHistoryTask = p.history.find(h => h.id === originalTaskId);
+                    if (!mistakenHistoryTask) return p;
+
+                    return {
+                        ...p,
+                        tasks: [...p.tasks.filter(t => t.id !== spawnedTaskId), { ...mistakenHistoryTask, status: "In Progress", endDate: null, completedAtTimestamp: null }],
+                        history: p.history.filter(h => h.id !== originalTaskId)
+                    };
+                });
+
+                setProjects(updated);
+                setLastHandOffAction(null);
+                await syncToCloud(updated, users);
             };
 
             const handleAbsoluteFinishProject = async (projectId, taskId) => {
-                if (!window.confirm("Is this book module completely finalized? Track will be archived.")) return;
-                const historyDate = getFormattedDateTime();
+                if (!window.confirm("Is this book module fully complete for archival closeout?")) return;
+                const historyDate = getFormattedDateOnly();
+                const timestamp = Date.now();
+
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
                     const targetTask = p.tasks.find(t => t.id === taskId);
                     return {
                         ...p,
-                        isArchived: true,
-                        tasks: [],
-                        history: [{ ...targetTask, status: "Done", endDate: historyDate }, ...p.history]
+                        isArchived: p.tasks.length === 1,
+                        tasks: p.tasks.filter(t => t.id !== taskId),
+                        history: [{ ...targetTask, status: "Done", endDate: historyDate, completedAtTimestamp: timestamp }, ...p.history]
                     };
                 });
-                setProjects(updated); await syncToCloud(updated, users);
+                setProjects(updated);
+                await syncToCloud(updated, users);
             };
 
             const openParallelModal = (projectId) => {
-                setParallelTargetProjectId(projectId); setParallelAssignee(users.find(u => u !== currentUser) || users[0]); setIsParallelModalOpen(true);
+                setParallelTargetProjectId(projectId);
+                setParallelAssignee(users.find(u => u !== currentUser) || users[0]);
+                setIsParallelModalOpen(true);
             };
 
             const executeParallelBranch = async (e) => {
-                e.preventDefault(); if (!parallelTargetProjectId) return;
+                e.preventDefault();
+                if (!parallelTargetProjectId) return;
+
+                const nowFormatted = getFormattedDateTime();
                 const updated = projects.map(p => {
                     if (p.id !== parallelTargetProjectId) return p;
-                    return { ...p, tasks: [...p.tasks, { id: `task-${Date.now()}`, name: "Awaiting parallel task...", status: "Pending Transfer", assignee: parallelAssignee, startDate: null, endDate: null, isParallel: true }] };
+                    return {
+                        ...p,
+                        tasks: [...p.tasks, { id: `task-${Date.now()}`, name: `Awaiting parallel task details from recipient... (Sent: ${nowFormatted})`, status: "Pending Transfer", assignee: parallelAssignee, startDate: null, endDate: null, isParallel: true }]
+                    };
                 });
-                setProjects(updated); setIsParallelModalOpen(false); await syncToCloud(updated, users);
+                setProjects(updated);
+                setIsParallelModalOpen(false);
+                await syncToCloud(updated, users);
             };
 
             const handleCreateProject = async (e) => {
                 e.preventDefault();
-                let seriesName = seriesCreationMode === "new" ? newSeriesInput.trim().toUpperCase() : selectedExistingSeries;
-                if (!seriesName) return;
+                let seriesName = "";
+                if (seriesCreationMode === "new") {
+                    if (!newSeriesInput.trim()) return;
+                    seriesName = newSeriesInput.trim().toUpperCase();
+                } else {
+                    if (!selectedExistingSeries) return;
+                    seriesName = selectedExistingSeries;
+                }
+
+                const nowFormatted = getFormattedDateTime();
                 const computedTitle = `${seriesName} - ${selectedComponent} - ${selectedStage} - ${selectedLevel}`;
                 const newProj = {
-                    id: `proj-${Date.now()}`, series: seriesName, component: selectedComponent, stage: selectedStage, level: selectedLevel, title: computedTitle, isArchived: false,
-                    tasks: [{ id: `task-${Date.now()}`, name: "Awaiting task description...", status: "Pending Transfer", assignee: firstAssignee || users[0], startDate: null, endDate: null, isParallel: false }],
+                    id: `proj-${Date.now()}`, series: seriesName, component: selectedComponent, stage: selectedStage, level: selectedLevel, title: computedTitle, stageColor: newProjectStageColor, isArchived: false,
+                    tasks: [{ id: `task-${Date.now()}`, name: `Awaiting task description from the recipient... (Sent: ${nowFormatted})`, status: "Pending Transfer", assignee: firstAssignee || users[0], startDate: null, endDate: null, isParallel: false }],
                     history: []
                 };
-                const updated = [newProj, ...projects]; setProjects(updated); setIsProjectModalOpen(false); await syncToCloud(updated, users);
+
+                const updated = [newProj, ...projects];
+                setProjects(updated);
+                setNewSeriesInput("");
+                setIsProjectModalOpen(false);
+                await syncToCloud(updated, users);
             };
 
-            // Workload Extraction
+            const getStageBadgeStyle = (color) => {
+                if (color === "Blue") return "bg-blue-950/80 text-blue-400 border-blue-900/50";
+                if (color === "Green") return "bg-emerald-950/80 text-emerald-400 border-emerald-900/50";
+                return "bg-rose-950/80 text-rose-400 border-rose-900/50";
+            };
+
             const myPlateTasks = [];
             projects.forEach(p => {
                 if (!p.isArchived) {
-                    p.tasks.forEach(t => { if (t.assignee === currentUser) myPlateTasks.push({ projectId: p.id, projectTitle: p.title, ...t }); });
+                    p.tasks.forEach(t => {
+                        if (t.assignee === currentUser) {
+                            myPlateTasks.push({ projectId: p.id, projectTitle: p.title, projectStageColor: p.stageColor || "Red", ...t });
+                        }
+                    });
                 }
             });
 
-            // Dynamic Unique Lists for Filters
-            const uniqueSeriesList = ["ALL", ...Array.from(new Set(projects.map(p => p.series)))];
+            const uniqueSeriesKeys = Array.from(new Set(projects.filter(p => !p.isArchived).map(p => p.series)));
+            const allAvailableLevelsGlobal = [...STAGE_LEVELS["PS"], ...STAGE_LEVELS["GS"], ...STAGE_LEVELS["JHS"], ...STAGE_LEVELS["SHS"]];
 
-            // Master Filter Logic (RESTORATION APPLIED)
-            const filteredMasterProjects = projects.filter(p => {
-                if (p.isArchived) return false;
-                const matchSeries = selectedSeriesFilter === "ALL" || p.series === selectedSeriesFilter;
-                const matchStage = selectedStageFilter === "ALL" || p.stage === selectedStageFilter;
-                return matchSeries && matchStage;
-            });
+            const toggleTree = (type, key) => {
+                if (type === 'series') setExpandedSeries(p => ({ ...p, [key]: !p[key] }));
+                if (type === 'component') setExpandedComponents(p => ({ ...p, [key]: !p[key] }));
+                if (type === 'stage') setExpandedStages(p => ({ ...p, [key]: !p[key] }));
+            };
 
-            if (isLoading) return <div className="flex flex-col items-center justify-center min-h-screen bg-[#080B10] text-slate-400 font-bold">Loading Production Matrix Base...</div>;
+            if (isLoading) {
+                return (
+                    <div class="flex flex-col items-center justify-center min-h-screen bg-[#080B10]">
+                        <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p class="text-sm font-bold tracking-wide text-slate-400">Connecting to Google Sheets Cloud Database...</p>
+                    </div>
+                );
+            }
 
             return (
-                <div className="max-w-5xl mx-auto px-4 py-6 md:py-10">
-                    {toast && <div className="fixed top-6 right-6 z-50 bg-slate-900 border border-indigo-500/40 p-4 rounded-xl text-xs font-bold text-slate-100">{toast}</div>}
-
-                    <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-6 mb-8 gap-4">
-                        <div>
-                            <h1 className="text-3xl font-extrabold heading-font text-white tracking-tight">Math Team Tracker<span className="text-indigo-400">.</span></h1>
+                <div class="max-w-5xl mx-auto px-4 py-6 md:py-10">
+                    
+                    {toast && (
+                        <div class="fixed top-6 right-6 z-50 bg-slate-900 border border-indigo-500/40 shadow-2xl p-4 rounded-xl flex items-center gap-3">
+                            <div class="w-2 h-2 rounded-full bg-lime-400 animate-ping"></div>
+                            <p class="text-sm font-semibold text-slate-100">{toast}</p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                            <button onClick={() => loadCloudData(true)} className="bg-slate-900 border border-slate-800 text-slate-400 px-3 py-2 rounded-xl text-xs font-bold hover:text-white transition"><i className="fa-solid fa-arrows-rotate mr-1"></i> Refresh</button>
-                            <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2">
-                                <select value={currentUser} onChange={(e) => setCurrentUser(e.target.value)} className="bg-transparent font-bold text-slate-100 text-sm focus:outline-none">
-                                    {users.map(u => <option className="bg-slate-950" key={u} value={u}>{u}</option>)}
-                                </select>
+                    )}
+
+                    {SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE" && (
+                        <div class="bg-amber-950/40 border border-amber-500/30 p-4 rounded-xl text-xs text-amber-300 mb-6 flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span><strong>Setup Required:</strong> Please configure your Google Sheets Apps Script Web App URL in line 40 of this file to activate multi-user live synchronization.</span>
+                        </div>
+                    )}
+
+                    {/* App Branding Top Bar */}
+                    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-6 mb-8 gap-4">
+                        <div>
+                            <h1 class="text-3xl font-extrabold heading-font text-white tracking-tight flex items-center gap-2">
+                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 9</span>
+                            </h1>
+                            <p class="text-slate-400 text-xs mt-0.5">Cloud-Synced Workflow Matrix</p>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                            <button onClick={() => loadCloudData(true)} class="bg-slate-900 border border-slate-800 text-slate-400 px-3 py-2 rounded-xl text-xs font-bold hover:text-white transition">
+                                <i class="fa-solid fa-arrows-rotate mr-1"></i> Refresh
+                            </button>
+                            <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-2.5">
+                                <div>
+                                    <span class="block text-[9px] uppercase tracking-wider text-slate-500 font-bold">User Context:</span>
+                                    <select value={currentUser} onChange={(e) => setCurrentUser(e.target.value)} class="bg-transparent font-bold text-slate-100 text-sm focus:outline-none cursor-pointer pr-2">
+                                        {users.map(u => <option class="bg-slate-950 text-slate-200" key={u} value={u}>{u}</option>)}
+                                    </select>
+                                </div>
                             </div>
-                            <button onClick={() => setIsProjectModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-lg transition"><i className="fa-solid fa-plus text-xs"></i> New Project</button>
+                            <button onClick={() => setIsTeamModalOpen(true)} class="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 transition">
+                                <i class="fa-solid fa-users text-xs text-indigo-400"></i> Manage Team
+                            </button>
+                            <button onClick={() => { setFirstAssignee(currentUser || users[0]); setIsProjectModalOpen(true); }} class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-lg transition">
+                                <i class="fa-solid fa-plus text-xs"></i> New Project
+                            </button>
                         </div>
                     </header>
 
-                    {/* Navigation Tab Bar */}
-                    <div className="flex flex-wrap gap-2 border-b border-slate-800 mb-8 bg-slate-900 p-1 rounded-xl w-full">
-                        <button onClick={() => setActiveTab("user-view")} className={`px-4 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'user-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>My Plate ({myPlateTasks.length})</button>
-                        <button onClick={() => setActiveTab("master-view")} className={`px-4 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'master-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>All Active Tracks ({projects.filter(p=>!p.isArchived).length})</button>
-                        <button onClick={() => setActiveTab("archive-view")} className={`px-4 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'archive-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}><i className="fa-solid fa-box-archive mr-1.5"></i> Archive Logs</button>
+                    {/* Navigation Dashboard System */}
+                    <div class="flex flex-wrap gap-2 border-b border-slate-800 mb-8 bg-slate-900 p-1 rounded-xl w-full">
+                        <button onClick={() => setActiveTab("user-view")} class={`px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'user-view' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                            <i class="fa-solid fa-tray text-indigo-400"></i> My Plate ({currentUser ? currentUser.split(" ")[0] : ""})
+                            {myPlateTasks.length > 0 && <span class="bg-indigo-500 text-white rounded-full px-1.5 py-0.5 text-[10px] font-black">{myPlateTasks.length}</span>}
+                        </button>
+                        <button onClick={() => setActiveTab("series-view")} class={`px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'series-view' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                            <i class="fa-solid fa-folder-tree text-indigo-400"></i> View Per Series
+                        </button>
+                        <button onClick={() => setActiveTab("level-view")} class={`px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'level-view' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                            <i class="fa-solid fa-layer-group text-indigo-400"></i> View Per Level
+                        </button>
+                        <button onClick={() => setActiveTab("workload-view")} class={`px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'workload-view' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                            <i class="fa-solid fa-chart-pie text-indigo-400"></i> Users Workload ({users.length})
+                        </button>
                     </div>
 
-                    {/* TAB 1: MY PLATE VIEW */}
+                    {/* TAB 1: USER CONTEXT PLATE */}
                     {activeTab === "user-view" && (
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            {myPlateTasks.length === 0 ? <p className="text-slate-600 italic p-10 col-span-2 text-center">Your workload is completely clear.</p> : myPlateTasks.map(task => (
-                                <div key={task.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
-                                    <div>
-                                        <div className="flex justify-between mb-3">
-                                            <span className="text-[10px] font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800 truncate">📚 {task.projectTitle}</span>
-                                            <span className="text-[9px] font-black px-2 py-0.5 rounded uppercase bg-emerald-950 text-emerald-400">{task.status === "Pending Transfer" ? "📥 Incoming" : "In Progress"}</span>
-                                        </div>
-                                        {task.status === "Pending Transfer" ? (
-                                            <div className="mb-4 bg-slate-950 p-3.5 rounded-xl border border-dashed border-slate-800">
-                                                <input type="text" placeholder="Task description context..." value={definedTaskNames[`${task.projectId}-${task.id}`] || ""} onChange={(e) => setDefinedTaskNames({ ...definedTaskNames, [`${task.projectId}-${task.id}`]: e.target.value })} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none" />
-                                            </div>
-                                        ) : (
-                                            <div className="mb-4 bg-slate-950/30 p-3 rounded-xl border border-slate-800/40">
-                                                <h3 className="text-xs font-bold text-slate-200 mb-1">{task.name}</h3>
-                                                <p className="text-[9px] text-slate-500">Started: {task.startDate}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="flex flex-col gap-2 pt-3 border-t border-slate-800/60">
-                                        {task.status === "Pending Transfer" ? <button onClick={() => handleReceiveAndStart(task.projectId, task.id)} className="w-full bg-emerald-600 text-slate-950 text-xs font-black py-2 rounded-xl">Receive & Start</button> : (
-                                            <div className="space-y-2">
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => openParallelModal(task.projectId)} className="bg-slate-800 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-xl flex-1">+ Parallel</button>
-                                                    <button onClick={() => handleDoneClick(task.projectId, task.id)} className="flex-[2] bg-indigo-600 text-white text-xs font-black py-1.5 rounded-xl">Done & Pass</button>
-                                                </div>
-                                                <button onClick={() => handleAbsoluteFinishProject(task.projectId, task.id)} className="w-full bg-gradient-to-r from-slate-950 to-slate-900 text-rose-400 font-bold text-xs py-1.5 rounded-xl border border-slate-800/60">Mark Book Complete & Archive</button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* TAB 2: FULLY RESTORED MASTER VIEW WITH DYNAMIC FILTER BUTTONS */}
-                    {activeTab === "master-view" && (
-                        <div className="space-y-6">
-                            
-                            {/* Filter Block 1: Per Series */}
-                            <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl space-y-2">
-                                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block"><i className="fa-solid fa-tags mr-1"></i> Filter Per Series:</span>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {uniqueSeriesList.map(series => (
-                                        <button key={series} onClick={() => setSelectedSeriesFilter(series)} className={`px-3 py-1 rounded-lg font-bold text-xs border transition ${selectedSeriesFilter === series ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'}`}>{series}</button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Filter Block 2: Per Level / Stage */}
-                            <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl space-y-2">
-                                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block"><i className="fa-solid fa-layer-group mr-1"></i> Filter Per Level/Stage:</span>
-                                <div className="flex flex-wrap gap-1.5">
-                                    <button onClick={() => setSelectedStageFilter("ALL")} className={`px-3 py-1 rounded-lg font-bold text-xs border transition ${selectedStageFilter === "ALL" ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'}`}>ALL LEVELS</button>
-                                    {STAGES.map(stage => (
-                                        <button key={stage} onClick={() => setSelectedStageFilter(stage)} className={`px-3 py-1 rounded-lg font-bold text-xs border transition ${selectedStageFilter === stage ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'}`}>{stage}</button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Pipeline Section Output */}
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center px-1">
-                                    <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Active Track Matrix ({filteredMasterProjects.length} visible)</h2>
-                                    {(selectedSeriesFilter !== "ALL" || selectedStageFilter !== "ALL") && (
-                                        <button onClick={() => { setSelectedSeriesFilter("ALL"); setSelectedStageFilter("ALL"); }} className="text-[10px] text-indigo-400 hover:underline font-bold">Clear Filters</button>
-                                    )}
-                                </div>
-                                
-                                {filteredMasterProjects.length === 0 ? <p className="text-slate-600 italic p-10 text-center bg-slate-900/20 border border-slate-800/50 rounded-xl">No active tracks match your selected filter matrix.</p> :
-                                filteredMasterProjects.map(p => (
-                                    <div key={p.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3 shadow-sm hover:border-slate-700 transition">
-                                        <div className="flex flex-wrap justify-between items-center border-b border-slate-800/50 pb-2 gap-2">
-                                            <span className="font-bold text-slate-200 text-sm">📚 {p.title}</span>
-                                            <div className="flex gap-1.5">
-                                                <span className="text-[9px] font-bold text-indigo-400 bg-indigo-950/60 border border-indigo-900/40 px-2 py-0.5 rounded">Series: {p.series}</span>
-                                                <span className="text-[9px] font-bold text-slate-400 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded">Stage: {p.stage} ({p.level})</span>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            {p.tasks.map(t => (
-                                                <div key={t.id} className="text-xs bg-slate-950/60 p-2 rounded flex justify-between items-center border border-slate-800/40">
-                                                    <div>
-                                                        <span className="text-slate-300 font-bold">{t.assignee}</span>
-                                                        <span className="text-slate-700 mx-2">|</span>
-                                                        <span className="text-slate-400 italic text-[11px]">{t.name}</span>
-                                                    </div>
-                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider ${t.status === "In Progress" ? "bg-amber-950 text-amber-400 border border-amber-900/50" : "bg-blue-950 text-blue-400 border border-blue-900/50"}`}>{t.status === "Pending Transfer" ? "Incoming" : t.status}</span>
-                                                </div>
-                                            ))}
+                        <div class="space-y-6">
+                            {lastHandOffAction && lastHandOffAction.sender === currentUser && (
+                                <div class="bg-indigo-950/40 border border-indigo-500/30 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fa-solid fa-rotate-left text-indigo-400 text-sm"></i>
+                                        <div>
+                                            <h4 class="text-xs font-bold text-slate-200">Mistakenly passed a task?</h4>
+                                            <p class="text-[10px] text-slate-400">Revert changes and recover your task from {lastHandOffAction.recipient.split(" ")[0]} instantly.</p>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                                    <button onClick={handleUndoHandOff} class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs px-4 py-2 rounded-xl transition shadow flex items-center gap-1.5 w-full sm:w-auto justify-center">
+                                        Undo Last Hand-off
+                                    </button>
+                                </div>
+                            )}
 
-                    {/* TAB 3: ARCHIVE LOGS VIEW */}
-                    {activeTab === "archive-view" && (
-                        <div className="space-y-4">
-                            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Finalized Production Archive Logs</h2>
-                            <div className="grid gap-3">
-                                {projects.filter(p => p.isArchived).length === 0 ? <p className="text-center p-10 text-slate-700 italic">No archived tracks available.</p> : 
-                                projects.filter(p => p.isArchived).map(p => {
-                                    const isLogOpen = !!openArchiveLogs[p.id];
-                                    return (
-                                        <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                                            <div className="p-4 flex justify-between items-center bg-slate-950/40">
-                                                <div className="flex-1 cursor-pointer" onClick={() => setOpenArchiveLogs(prev => ({ ...prev, [p.id]: !isLogOpen }))}>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-sm font-bold text-slate-200">{p.title}</span>
-                                                        <i className={`fa-solid text-slate-500 text-xs ${isLogOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
-                                                    </div>
-                                                    <div className="text-[10px] text-slate-500 mt-0.5">Click to expand processing history dates ({p.history ? p.history.length : 0} logs)</div>
-                                                </div>
-                                                <button onClick={() => handleUnarchive(p.id)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-[10px] font-black transition ml-4"><i className="fa-solid fa-rotate-left mr-1"></i> Restore</button>
-                                            </div>
-                                            
-                                            {isLogOpen && (
-                                                <div className="p-4 bg-slate-950/80 border-t border-slate-800/60 space-y-3">
-                                                    <h4 className="text-[10px] uppercase font-black tracking-widest text-indigo-400">Task Completion Logs:</h4>
-                                                    {p.history && p.history.length > 0 ? (
-                                                        <div className="space-y-2 border-l-2 border-slate-800 pl-4 ml-2">
-                                                            {p.history.map((h, index) => (
-                                                                <div key={index} className="text-xs bg-slate-900/60 p-2.5 rounded border border-slate-800/40">
-                                                                    <div className="flex justify-between font-bold text-slate-300">
-                                                                        <span>{h.name}</span>
-                                                                        <span className="text-[10px] text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded uppercase">Done</span>
-                                                                    </div>
-                                                                    <div className="grid grid-cols-2 gap-2 mt-1.5 text-[10px] text-slate-500">
-                                                                        <div><span className="text-slate-600">Assignee:</span> {h.assignee}</div>
-                                                                        <div className="text-right"><span className="text-slate-600">Started:</span> {h.startDate || "N/A"}</div>
-                                                                        <div className="col-span-2 text-right text-indigo-400"><span className="text-slate-600">Finished:</span> {h.endDate}</div>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
+                            <div>
+                                <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <span class="w-1 h-3 bg-indigo-500 rounded-xs"></span> Tasks Pending Your Action
+                                </h2>
+
+                                {myPlateTasks.length === 0 ? (
+                                    <div class="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-12 text-center">
+                                        <i class="fa-solid fa-folder-open text-slate-700 text-2xl mb-2"></i>
+                                        <h3 class="text-xs font-bold text-slate-400">No workload allocated here.</h3>
+                                    </div>
+                                ) : (
+                                    <div class="grid gap-4 sm:grid-cols-2">
+                                        {myPlateTasks.map(task => (
+                                            <div key={task.id} class="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+                                                <div>
+                                                    <div class="flex justify-between items-start gap-2 mb-3">
+                                                        <div class="flex flex-wrap items-center gap-1 max-w-[70%]">
+                                                            <span class="text-[10px] font-bold uppercase bg-slate-950 text-slate-300 px-2 py-0.5 rounded border border-slate-800 truncate">
+                                                                📚 {task.projectTitle}
+                                                            </span>
+                                                            <span class={`text-[8px] font-black px-1.5 py-0.5 rounded border ${getStageBadgeStyle(task.projectStageColor)}`}>
+                                                                {task.projectStageColor}
+                                                            </span>
                                                         </div>
-                                                    ) : <p className="text-[11px] text-slate-600 italic">No history dates saved.</p>}
+                                                        <span class={`text-[9px] font-black px-2 py-0.5 rounded uppercase bg-amber-950 text-amber-400 border border-amber-900/40`}>
+                                                            {task.status === "Pending Transfer" ? "📥 Incoming" : task.status}
+                                                        </span>
+                                                    </div>
+
+                                                    {task.status === "Pending Transfer" ? (
+                                                        <div class="mb-4 bg-slate-950 p-3.5 rounded-xl border border-dashed border-slate-800">
+                                                            <label class="block text-[9px] font-black text-amber-400 uppercase mb-1.5">📥 Define Task Mission Description</label>
+                                                            <input type="text" placeholder="e.g. Editing Module 1 Chapters 1-3" value={definedTaskNames[`${task.projectId}-${task.id}`] || ""} onChange={(e) => setDefinedTaskNames({ ...definedTaskNames, [`${task.projectId}-${task.id}`]: e.target.value })} class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500" />
+                                                        </div>
+                                                    ) : (
+                                                        <div class="mb-4 bg-slate-950/30 border border-slate-800/40 p-3 rounded-xl relative">
+                                                            <h3 class="text-xs font-bold text-slate-200 mb-1 pr-14">{task.name}</h3>
+                                                            <p class="text-[9px] text-slate-500"><i class="fa-solid fa-clock mr-1"></i> Triggered: {task.startDate}</p>
+                                                            <button onClick={() => openEditTaskModal(task.projectId, task.id, task.name)} class="absolute right-2 top-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[9px] px-1.5 py-0.5 rounded">Edit</button>
+                                                        </div>
+                                                    )}
                                                 </div>
+
+                                                <div class="flex gap-2 pt-2 border-t border-slate-800/60 mt-auto">
+                                                    {task.status === "Pending Transfer" ? (
+                                                        <button onClick={() => handleReceiveAndStart(task.projectId, task.id)} class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2 rounded-xl transition shadow">
+                                                            Accept & Begin Workflow
+                                                        </button>
+                                                    ) : (
+                                                        <React.Fragment>
+                                                            <button onClick={() => handleDoneClick(task.projectId, task.id)} class="flex-1 bg-slate-800 hover:bg-emerald-900 border border-slate-700 hover:border-emerald-700 text-slate-200 hover:text-emerald-200 font-bold text-xs py-2 rounded-xl transition flex items-center justify-center gap-1.5">
+                                                                <i class="fa-solid fa-share text-[10px]"></i> Hand-off Next
+                                                            </button>
+                                                            <button onClick={() => handleAbsoluteFinishProject(task.projectId, task.id)} class="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white px-3 py-2 rounded-xl text-xs font-bold transition" title="Complete & Close Core Matrix Folder">
+                                                                <i class="fa-solid fa-box-archive"></i> Close
+                                                            </button>
+                                                        </React.Fragment>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TAB 2: STRUCTURAL TREE PER SERIES */}
+                    {activeTab === "series-view" && (
+                        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6">
+                            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span class="w-1 h-3 bg-indigo-500 rounded-xs"></span> Series Hierarchy Tree Map
+                            </h2>
+
+                            {uniqueSeriesKeys.length === 0 ? (
+                                <div class="text-center py-8 text-slate-500 text-xs font-semibold">No active operational matrix databases logged yet.</div>
+                            ) : (
+                                <div class="space-y-4">
+                                    {uniqueSeriesKeys.map(seriesKey => {
+                                        const seriesProjects = projects.filter(p => p.series === seriesKey && !p.isArchived);
+                                        const isSerExpanded = !!expandedSeries[seriesKey];
+
+                                        return (
+                                            <div key={seriesKey} class="border border-slate-800/80 rounded-2xl bg-slate-950/40 overflow-hidden">
+                                                <button onClick={() => toggleTree('series', seriesKey)} class="w-full flex items-center justify-between p-4 bg-slate-950/80 hover:bg-slate-900/60 transition text-left">
+                                                    <div class="flex items-center gap-2.5">
+                                                        <i class={`fa-solid text-xs text-indigo-400 ${isSerExpanded ? 'fa-folder-open' : 'fa-folder'}`}></i>
+                                                        <span class="text-sm font-extrabold text-slate-100 tracking-wide heading-font">{seriesKey} Matrix Series</span>
+                                                        <span class="text-[10px] font-bold bg-slate-900 text-slate-400 px-2 py-0.5 rounded-full border border-slate-800">{seriesProjects.length} Channels</span>
+                                                    </div>
+                                                    <i class={`fa-solid text-xs text-slate-500 transition-transform ${isSerExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
+                                                </button>
+
+                                                {isSerExpanded && (
+                                                    <div class="p-4 bg-slate-900/20 border-t border-slate-900/60 space-y-4">
+                                                        {COMPONENTS.map(comp => {
+                                                            const compProjects = seriesProjects.filter(p => p.component === comp);
+                                                            if (compProjects.length === 0) return null;
+                                                            const compKey = `${seriesKey}-${comp}`;
+                                                            const isCompExpanded = !!expandedComponents[compKey];
+
+                                                            return (
+                                                                <div key={comp} class="pl-4 border-l border-slate-800/60">
+                                                                    <button onClick={() => toggleTree('component', compKey)} class="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-slate-200 mb-2 transition">
+                                                                        <i class={`fa-solid ${isCompExpanded ? 'fa-square-minus text-indigo-400/80' : 'fa-square-plus text-slate-600'}`}></i>
+                                                                        Component: <span class="text-slate-200">{comp}</span>
+                                                                    </button>
+
+                                                                    {isCompExpanded && (
+                                                                        <div class="pl-4 space-y-3 mt-2 mb-4">
+                                                                            {STAGES.map(stg => {
+                                                                                const stageProjects = compProjects.filter(p => p.stage === stg);
+                                                                                if (stageProjects.length === 0) return null;
+                                                                                const stgKey = `${compKey}-${stg}`;
+                                                                                const isStgExpanded = !!expandedStages[stgKey];
+
+                                                                                return (
+                                                                                    <div key={stg} class="pl-3 border-l border-slate-800/40">
+                                                                                        <button onClick={() => toggleTree('stage', stgKey)} class="flex items-center gap-2 text-[11px] font-semibold text-slate-500 hover:text-slate-300 mb-2 transition">
+                                                                                            <i class={`fa-solid ${isStgExpanded ? 'fa-circle-minus text-indigo-400/60' : 'fa-circle-plus text-slate-700'}`}></i>
+                                                                                            Stage Sector: <span class="text-slate-300 font-bold">{stg}</span>
+                                                                                        </button>
+
+                                                                                        {isStgExpanded && (
+                                                                                            <div class="pl-4 space-y-2 mt-1">
+                                                                                                {stageProjects.map(proj => (
+                                                                                                    <div key={proj.id} class="bg-slate-950/60 border border-slate-800/60 rounded-xl p-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                                                                                        <div>
+                                                                                                            <div class="flex items-center gap-2 mb-1.5">
+                                                                                                                <h4 class="text-xs font-black text-slate-200">{proj.title}</h4>
+                                                                                                                <span class={`text-[8px] font-black px-1.5 py-0.5 rounded border ${getStageBadgeStyle(proj.stageColor)}`}>{proj.stageColor || "Red"}</span>
+                                                                                                            </div>
+                                                                                                            <div class="space-y-1">
+                                                                                                                {proj.tasks.map(t => (
+                                                                                                                    <p key={t.id} class="text-[10px] text-slate-400 flex flex-wrap items-center gap-x-1.5">
+                                                                                                                        <span class="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                                                                                                                        <strong class="text-slate-300">{t.assignee.split(" ")[0]}:</strong> 
+                                                                                                                        <span>{t.name}</span>
+                                                                                                                        <span class="text-[8px] uppercase tracking-wider bg-slate-900 px-1 rounded text-amber-400 font-bold">{t.status === "Pending Transfer" ? "Incoming" : t.status}</span>
+                                                                                                                    </p>
+                                                                                                                ))}
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                        <button onClick={() => openParallelModal(proj.id)} class="bg-slate-900 hover:bg-indigo-950 border border-slate-800 hover:border-indigo-900 text-slate-400 hover:text-indigo-400 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition shrink-0 w-full sm:w-auto text-center">
+                                                                                                            <i class="fa-solid fa-code-branch mr-1"></i> Trigger Parallel Track
+                                                                                                        </button>
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* TAB 3: MATRIX LEVEL GRID BLOCK VIEW */}
+                    {activeTab === "level-view" && (
+                        <div class="space-y-8">
+                            {STAGES.map(stageGroup => {
+                                const activeLevels = STAGE_LEVELS[stageGroup];
+                                return (
+                                    <div key={stageGroup} class="bg-slate-900/60 border border-slate-800/80 rounded-3xl p-6">
+                                        <h3 class="text-sm font-black text-slate-200 uppercase tracking-widest mb-4 heading-font flex items-center gap-2">
+                                            <span class="w-1.5 h-3.5 bg-indigo-500 rounded-xs"></span> Level Sector: {stageGroup} System
+                                        </h3>
+                                        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                            {activeLevels.map(lvl => {
+                                                const lvlProjects = projects.filter(p => p.stage === stageGroup && p.level === lvl && !p.isArchived);
+                                                return (
+                                                    <div key={lvl} class="bg-slate-950/60 border border-slate-800 p-4 rounded-2xl flex flex-col justify-between">
+                                                        <div>
+                                                            <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-800/60">
+                                                                <span class="text-xs font-black text-slate-300 heading-font">{lvl}</span>
+                                                                <span class="text-[10px] font-bold text-slate-500 font-mono">{lvlProjects.length} active</span>
+                                                            </div>
+                                                            {lvlProjects.length === 0 ? (
+                                                                <p class="text-[10px] text-slate-600 italic py-2">Clear data sector channel.</p>
+                                                            ) : (
+                                                                <div class="space-y-2.5">
+                                                                    {lvlProjects.map(p => (
+                                                                        <div key={p.id} class="text-[10px] bg-slate-900/80 border border-slate-800/60 rounded-xl p-2.5">
+                                                                            <div class="font-bold text-slate-200 mb-1 flex justify-between items-center">
+                                                                                <span class="truncate max-w-[80%]">{p.series} - {p.component}</span>
+                                                                                <span class={`text-[7px] px-1 rounded border scale-90 ${getStageBadgeStyle(p.stageColor)}`}>{p.stageColor || "Red"}</span>
+                                                                            </div>
+                                                                            <div class="space-y-1 pl-1 border-l border-indigo-500/30">
+                                                                                {p.tasks.map(t => (
+                                                                                    <div key={t.id} class="text-slate-400 text-[9px] truncate">
+                                                                                        <span class="text-slate-300 font-semibold">{t.assignee.split(" ")[0]}:</span> {t.name}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* TAB 4: WORKLOAD STATISTICAL REPORT */}
+                    {activeTab === "workload-view" && (
+                        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6">
+                            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span class="w-1 h-3 bg-indigo-500 rounded-xs"></span> Core Matrix Human Resource Roster & Workloads
+                            </h2>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-xs border-collapse">
+                                    <thead>
+                                        <tr class="border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                                            <th class="pb-3 pl-2">Team Member Profile String</th>
+                                            <th class="pb-3 text-center">Active Pipelines</th>
+                                            <th class="pb-3 text-center">Unresolved Tasks</th>
+                                            <th class="pb-3 text-center">Archived Closeouts</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-800/60 font-medium">
+                                        {users.map(u => {
+                                            const totalProjectsInvolved = projects.filter(p => !p.isArchived && p.tasks.some(t => t.assignee === u)).length;
+                                            const totalTasksPending = projects.filter(p => !p.isArchived).reduce((acc, p) => acc + p.tasks.filter(t => t.assignee === u).length, 0);
+                                            const archiveCount = projects.filter(p => p.isArchived && p.history.some(h => h.assignee === u)).length;
+
+                                            return (
+                                                <tr key={u} class="hover:bg-slate-950/40 transition">
+                                                    <td class="py-3.5 pl-2 font-bold text-slate-200">{u}</td>
+                                                    <td class="py-3.5 text-center font-mono font-bold text-indigo-400">{totalProjectsInvolved}</td>
+                                                    <td class="py-3.5 text-center font-mono font-bold text-amber-400">{totalTasksPending}</td>
+                                                    <td class="py-3.5 text-center font-mono text-slate-500">{archiveCount} books</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* GLOBAL MODAL SYSTEM CONTAINER */}
+
+                    {/* MODAL A: NEW CONFIG CHANNEL PROJECT */}
+                    {isProjectModalOpen && (
+                        <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+                            <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+                                <button onClick={() => setIsProjectModalOpen(false)} class="absolute right-4 top-4 text-slate-500 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+                                <h3 class="text-base font-extrabold text-white mb-4 heading-font">Create Track Core Matrix</h3>
+                                
+                                <form onSubmit={handleCreateProject} class="space-y-4 text-xs">
+                                    <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                                        <label class="block text-[9px] font-black text-slate-400 uppercase mb-2">Series Mapping Selection</label>
+                                        <div class="flex gap-4 mb-2">
+                                            <label class="flex items-center gap-1.5 font-bold cursor-pointer text-slate-300">
+                                                <input type="radio" name="seriesMode" checked={seriesCreationMode === "new"} onChange={() => setSeriesCreationMode("new")} class="accent-indigo-500" /> New Series String
+                                            </label>
+                                            {existingSeriesList.length > 0 && (
+                                                <label class="flex items-center gap-1.5 font-bold cursor-pointer text-slate-300">
+                                                    <input type="radio" name="seriesMode" checked={seriesCreationMode === "existing"} onChange={() => setSeriesCreationMode("existing")} class="accent-indigo-500" /> Existing Series Lookup
+                                                </label>
                                             )}
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
 
-                    {/* MODAL: CREATE PROJECT */}
-                    {isProjectModalOpen && (
-                        <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 text-xs space-y-3">
-                                <h3 className="text-sm font-bold text-slate-100">Architect New Module</h3>
-                                <form onSubmit={handleCreateProject} className="space-y-3">
-                                    <div className="flex gap-4 bg-slate-950 p-2 rounded">
-                                        <label><input type="radio" checked={seriesCreationMode === "new"} onChange={() => setSeriesCreationMode("new")} /> New Series</label>
-                                        <label><input type="radio" checked={seriesCreationMode === "existing"} onChange={() => setSeriesCreationMode("existing")} /> Existing Series</label>
+                                        {seriesCreationMode === "new" ? (
+                                            <input type="text" placeholder="e.g. MATH FOR REAL" value={newSeriesInput} onChange={(e) => setNewSeriesInput(e.target.value)} class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500 uppercase font-mono font-bold" />
+                                        ) : (
+                                            <select value={selectedExistingSeries} onChange={(e) => setSelectedExistingSeries(e.target.value)} class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500 font-mono font-bold">
+                                                {existingSeriesList.map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        )}
                                     </div>
-                                    {seriesCreationMode === "new" ? <input type="text" required placeholder="Series Code (e.g. NCM)" value={newSeriesInput} onChange={(e) => setNewSeriesInput(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded" /> :
-                                    <select value={selectedExistingSeries} onChange={(e) => setSelectedExistingSeries(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{Array.from(new Set(projects.map(p => p.series))).map(x => <option key={x} value={x}>{x}</option>)}</select>}
-                                    <select value={selectedComponent} onChange={(e) => setSelectedComponent(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{COMPONENTS.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                                    <select value={selectedStage} onChange={(e) => setSelectedStage(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{STAGES.map(s => <option key={s} value={s}>{s}</option>)}</select>
-                                    <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{STAGE_LEVELS[selectedStage].map(l => <option key={l} value={l}>{l}</option>)}</select>
-                                    <select value={firstAssignee} onChange={(e) => setFirstAssignee(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{users.map(u => <option key={u} value={u}>{u}</option>)}</select>
-                                    <div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setIsProjectModalOpen(false)}>Cancel</button><button type="submit" className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg font-bold">Deploy Module</button></div>
+
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <div>
+                                            <label class="block text-[9px] font-black text-slate-500 uppercase mb-1">Component</label>
+                                            <select value={selectedComponent} onChange={(e) => setSelectedComponent(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 font-bold text-slate-200 outline-none">
+                                                {COMPONENTS.map(c => <option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-[9px] font-black text-slate-500 uppercase mb-1">Sector Stage</label>
+                                            <select value={selectedStage} onChange={(e) => setSelectedStage(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 font-bold text-slate-200 outline-none">
+                                                {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-[9px] font-black text-slate-500 uppercase mb-1">Grade Level</label>
+                                            <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 font-bold text-slate-200 outline-none">
+                                                {STAGE_LEVELS[selectedStage]?.map(l => <option key={l} value={l}>{l}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label class="block text-[9px] font-black text-slate-500 uppercase mb-1">Stage Track Flag Color</label>
+                                            <select value={newProjectStageColor} onChange={(e) => setNewProjectStageColor(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 font-bold text-slate-200 outline-none">
+                                                <option value="Red">Red Flag Matrix</option>
+                                                <option value="Blue">Blue Flag Matrix</option>
+                                                <option value="Green">Green Flag Matrix</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-[9px] font-black text-slate-500 uppercase mb-1">Init Recipient Actor</label>
+                                            <select value={firstAssignee} onChange={(e) => setFirstAssignee(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 font-bold text-slate-200 outline-none">
+                                                {users.map(u => <option key={u} value={u}>{u}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl transition shadow mt-2">
+                                        Establish Project Database Folder
+                                    </button>
                                 </form>
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL: HANDOFF */}
+                    {/* MODAL B: TRANSFER AND HAND-OFF SUITE */}
                     {isHandOffModalOpen && (
-                        <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
-                            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full text-xs">
-                                <h3 className="text-sm font-bold mb-3">➡️ Hand-Off Module Assignment</h3>
-                                <form onSubmit={executeHandOff} className="space-y-4">
-                                    <select value={nextAssignee} onChange={(e) => setNextAssignee(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded font-bold text-slate-200">{users.map(u => <option key={u} value={u}>{u}</option>)}</select>
-                                    <div className="flex justify-end gap-2"><button type="button" onClick={() => setIsHandOffModalOpen(false)}>Cancel</button><button type="submit" className="bg-indigo-600 text-white px-4 py-1.5 rounded">Confirm Transfer</button></div>
+                        <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+                            <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+                                <button onClick={() => setIsHandOffModalOpen(false)} class="absolute right-4 top-4 text-slate-500 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+                                <h3 class="text-base font-extrabold text-white mb-1 heading-font">Secure Asset Hand-off Matrix</h3>
+                                <p class="text-[10px] text-slate-400 mb-4">Relinquish current access token to next sequential operational node.</p>
+                                
+                                <form onSubmit={executeHandOff} class="space-y-4 text-xs">
+                                    <div>
+                                        <label class="block text-[9px] font-black text-slate-500 uppercase mb-1">Target Recipient Actor Node</label>
+                                        <select value={nextAssignee} onChange={(e) => setNextAssignee(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 font-bold text-slate-200 outline-none focus:border-indigo-500">
+                                            {users.map(u => <option key={u} value={u}>{u}</option>)}
+                                        </select>
+                                    </div>
+
+                                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl transition shadow">
+                                        Authorize Hand-off Transfer
+                                    </button>
                                 </form>
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL: PARALLEL */}
+                    {/* MODAL C: HUMAN RESOURCE ROSTER MANAGEMENT */}
+                    {isTeamModalOpen && (
+                        <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+                            <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+                                <button onClick={() => setIsTeamModalOpen(false)} class="absolute right-4 top-4 text-slate-500 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+                                <h3 class="text-base font-extrabold text-white mb-4 heading-font">Manage Operator Personnel Team</h3>
+                                
+                                <form onSubmit={handleAddMember} class="flex gap-2 mb-4 text-xs">
+                                    <input type="text" placeholder="Name (e.g. Alex)" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-indigo-500 font-bold" />
+                                    <input type="text" placeholder="Role (e.g. Writer)" value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} class="w-28 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-indigo-500 font-bold" />
+                                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-4 rounded-lg transition shadow">Add</button>
+                                </form>
+
+                                <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                                    {users.map(u => (
+                                        <div key={u} class="flex justify-between items-center bg-slate-950 p-2 rounded-xl border border-slate-800/60 font-bold text-slate-300">
+                                            <span>{u}</span>
+                                            <button onClick={() => handleRemoveMember(u)} class="text-slate-600 hover:text-rose-400 text-[11px] p-1 transition"><i class="fa-solid fa-trash-can"></i></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL D: PARALLEL DISCRETE TRACK CREATOR */}
                     {isParallelModalOpen && (
-                        <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
-                            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full text-xs">
-                                <h3 className="text-sm font-bold mb-3">Deploy Simultaneous Workflow</h3>
-                                <form onSubmit={executeParallelBranch} className="space-y-4">
-                                    <select value={parallelAssignee} onChange={(e) => setParallelAssignee(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{users.map(u => <option key={u} value={u}>{u}</option>)}</select>
-                                    <div className="flex justify-end gap-2"><button type="button" onClick={() => setIsParallelModalOpen(false)}>Cancel</button><button type="submit" className="bg-indigo-600 text-white px-4 py-1.5 rounded">Deploy</button></div>
+                        <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+                            <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+                                <button onClick={() => setIsParallelModalOpen(false)} class="absolute right-4 top-4 text-slate-500 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+                                <h3 class="text-base font-extrabold text-white mb-1 heading-font">Spawn Parallel Operational Track</h3>
+                                <p class="text-[10px] text-slate-400 mb-4">Creates a separate concurrent lane independent from the primary sequence flow.</p>
+                                
+                                <form onSubmit={executeParallelBranch} class="space-y-4 text-xs">
+                                    <div>
+                                        <label class="block text-[9px] font-black text-slate-500 uppercase mb-1">Target Parallel Operator</label>
+                                        <select value={parallelAssignee} onChange={(e) => setParallelAssignee(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 font-bold text-slate-200 outline-none focus:border-indigo-500">
+                                            {users.map(u => <option key={u} value={u}>{u}</option>)}
+                                        </select>
+                                    </div>
+
+                                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl transition shadow">
+                                        Instantiate Parallel Stream Lane
+                                    </button>
                                 </form>
                             </div>
                         </div>
                     )}
+
+                    {/* MODAL E: EDIT DESCRIPTION TEXT CONTEXT */}
+                    {isEditModalOpen && (
+                        <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+                            <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+                                <button onClick={() => { setIsEditModalOpen(false); setEditTarget(null); }} class="absolute right-4 top-4 text-slate-500 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+                                <h3 class="text-base font-extrabold text-white mb-4 heading-font">Amend Active Task Text</h3>
+                                
+                                <form onSubmit={saveEditedTaskName} class="space-y-4 text-xs">
+                                    <div>
+                                        <label class="block text-[9px] font-black text-slate-500 uppercase mb-1">Task Content Statement Description</label>
+                                        <input type="text" value={editTaskNameInput} onChange={(e) => setEditTaskNameInput(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-slate-200 font-bold outline-none focus:border-indigo-500" />
+                                    </div>
+
+                                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl transition shadow">
+                                        Commit Structural Name Change
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
         root.render(<App />);
     </script>
 </body>

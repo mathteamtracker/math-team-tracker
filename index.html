@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Team Tracker (Ver 9.2.2 - Streamlined Workflow)</title>
+    <title>Math Team Tracker (Ver 9.2.3 - Clean Baseline)</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.10/babel.min.js"></script>
@@ -42,14 +42,11 @@
             const [users, setUsers] = useState(DEFAULT_USERS);
             const [projects, setProjects] = useState([]);
             const [currentUser, setCurrentUser] = useState("");
-            const [activeTab, setActiveTab] = useState("user-view");
+            const [activeTab, setActiveTab] = useState("user-view"); // Options: user-view, master-view, archive-view
             const [isLoading, setIsLoading] = useState(true);
 
-            // Expansion toggles
+            // Toggles & Modals
             const [openArchiveLogs, setOpenArchiveLogs] = useState({});
-            const [lastHandOffAction, setLastHandOffAction] = useState(null);
-
-            // Modals
             const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
             const [isHandOffModalOpen, setIsHandOffModalOpen] = useState(false);
             const [isParallelModalOpen, setIsParallelModalOpen] = useState(false);
@@ -61,7 +58,6 @@
             const [selectedComponent, setSelectedComponent] = useState(COMPONENTS[0]);
             const [selectedStage, setSelectedStage] = useState(STAGES[0]);
             const [selectedLevel, setSelectedLevel] = useState(STAGE_LEVELS[STAGES[0]][0]);
-            const [newProjectStageColor, setNewProjectStageColor] = useState("Red");
             const [firstAssignee, setFirstAssignee] = useState("");
 
             const [handOffTarget, setHandOffTarget] = useState(null); 
@@ -91,7 +87,7 @@
                         if (!currentUser) setCurrentUser(data.users[0]);
                     }
                     if (data.projects) setProjects(data.projects);
-                    if (showToast) triggerToast("🔄 Data updated successfully!");
+                    if (showToast) triggerToast("🔄 System Database Synced!");
                 } catch (error) {
                     console.error("Cloud Error:", error);
                     triggerToast("❌ Sync failure.");
@@ -131,7 +127,7 @@
             const handleUnarchive = async (projectId) => {
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
-                    return { ...p, isArchived: false };
+                    return { ...p, isArchived: false, tasks: [{ id: `task-${Date.now()}`, name: "Restored Task Context Placeholder", status: "Pending Transfer", assignee: currentUser, startDate: null, endDate: null, isParallel: false }] };
                 });
                 setProjects(updated);
                 await syncToCloud(updated, users);
@@ -157,22 +153,18 @@
                 e.preventDefault(); if (!handOffTarget) return;
                 const { projectId, taskId } = handOffTarget;
                 const historyDate = getFormattedDateTime(); 
-                const timestamp = Date.now();
-                let spawnedTaskId = null;
 
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
                     const targetTask = p.tasks.find(t => t.id === taskId);
-                    const completedTask = { ...targetTask, status: "Done", endDate: historyDate, completedAtTimestamp: timestamp };
+                    const completedTask = { ...targetTask, status: "Done", endDate: historyDate };
                     const remainingTasks = p.tasks.filter(t => t.id !== taskId);
                     const shouldSpawnNextPlaceholder = !targetTask.isParallel && remainingTasks.filter(r => !r.isParallel).length === 0;
 
                     let updatedTasks = remainingTasks;
                     if (shouldSpawnNextPlaceholder) {
-                        spawnedTaskId = `task-${Date.now()}`;
-                        updatedTasks = [...remainingTasks, { id: spawnedTaskId, name: "Awaiting task description from the recipient...", status: "Pending Transfer", assignee: nextAssignee, startDate: null, endDate: null, isParallel: false }];
+                        updatedTasks = [...remainingTasks, { id: `task-${Date.now()}`, name: "Awaiting task description...", status: "Pending Transfer", assignee: nextAssignee, startDate: null, endDate: null, isParallel: false }];
                     }
-                    setLastHandOffAction({ projectId: p.id, originalTaskId: targetTask.id, spawnedTaskId: spawnedTaskId, sender: currentUser, recipient: nextAssignee });
                     return { ...p, tasks: updatedTasks, history: [completedTask, ...p.history] };
                 });
 
@@ -180,7 +172,7 @@
             };
 
             const handleAbsoluteFinishProject = async (projectId, taskId) => {
-                if (!window.confirm("Is this book module completely finalized?")) return;
+                if (!window.confirm("Is this book module completely finalized? Track will be archived.")) return;
                 const historyDate = getFormattedDateTime();
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
@@ -188,8 +180,8 @@
                     return {
                         ...p,
                         isArchived: true,
-                        tasks: p.tasks.filter(t => t.id !== taskId),
-                        history: [{ ...targetTask, status: "Done", endDate: historyDate, completedAtTimestamp: Date.now() }, ...p.history]
+                        tasks: [],
+                        history: [{ ...targetTask, status: "Done", endDate: historyDate }, ...p.history]
                     };
                 });
                 setProjects(updated); await syncToCloud(updated, users);
@@ -214,17 +206,14 @@
                 if (!seriesName) return;
                 const computedTitle = `${seriesName} - ${selectedComponent} - ${selectedStage} - ${selectedLevel}`;
                 const newProj = {
-                    id: `proj-${Date.now()}`, series: seriesName, component: selectedComponent, stage: selectedStage, level: selectedLevel, title: computedTitle, stageColor: newProjectStageColor, isArchived: false,
+                    id: `proj-${Date.now()}`, series: seriesName, component: selectedComponent, stage: selectedStage, level: selectedLevel, title: computedTitle, isArchived: false,
                     tasks: [{ id: `task-${Date.now()}`, name: "Awaiting task description...", status: "Pending Transfer", assignee: firstAssignee || users[0], startDate: null, endDate: null, isParallel: false }],
                     history: []
                 };
                 const updated = [newProj, ...projects]; setProjects(updated); setIsProjectModalOpen(false); await syncToCloud(updated, users);
             };
 
-            const toggleArchiveLogs = (id) => {
-                setOpenArchiveLogs(prev => ({ ...prev, [id]: !prev[id] }));
-            };
-
+            // Workload calculation
             const myPlateTasks = [];
             projects.forEach(p => {
                 if (!p.isArchived) {
@@ -232,7 +221,7 @@
                 }
             });
 
-            if (isLoading) return <div className="flex flex-col items-center justify-center min-h-screen bg-[#080B10] text-slate-400 font-bold">Refreshing Matrix Database...</div>;
+            if (isLoading) return <div className="flex flex-col items-center justify-center min-h-screen bg-[#080B10] text-slate-400 font-bold">Loading Production Matrix Base...</div>;
 
             return (
                 <div className="max-w-5xl mx-auto px-4 py-6 md:py-10">
@@ -253,11 +242,14 @@
                         </div>
                     </header>
 
+                    {/* THREE restored baseline tabs (No Restriction) */}
                     <div className="flex flex-wrap gap-2 border-b border-slate-800 mb-8 bg-slate-900 p-1 rounded-xl w-full">
-                        <button onClick={() => setActiveTab("user-view")} className={`px-4 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'user-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>My Plate</button>
-                        <button onClick={() => setActiveTab("archive-view")} className={`px-4 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'archive-view' ? 'bg-indigo-900 text-white' : 'text-slate-400'}`}><i className="fa-solid fa-box-archive mr-1.5"></i> Archive Logs</button>
+                        <button onClick={() => setActiveTab("user-view")} className={`px-4 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'user-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>My Plate ({myPlateTasks.length})</button>
+                        <button onClick={() => setActiveTab("master-view")} className={`px-4 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'master-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>All Active Tracks ({projects.filter(p=>!p.isArchived).length})</button>
+                        <button onClick={() => setActiveTab("archive-view")} className={`px-4 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'archive-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}><i className="fa-solid fa-box-archive mr-1.5"></i> Archive Logs</button>
                     </div>
 
+                    {/* TAB 1: MY PLATE VIEW */}
                     {activeTab === "user-view" && (
                         <div className="grid gap-4 sm:grid-cols-2">
                             {myPlateTasks.length === 0 ? <p className="text-slate-600 italic p-10 col-span-2 text-center">Your workload is completely clear.</p> : myPlateTasks.map(task => (
@@ -285,7 +277,7 @@
                                                     <button onClick={() => openParallelModal(task.projectId)} className="bg-slate-800 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-xl flex-1">+ Parallel</button>
                                                     <button onClick={() => handleDoneClick(task.projectId, task.id)} className="flex-[2] bg-indigo-600 text-white text-xs font-black py-1.5 rounded-xl">Done & Pass</button>
                                                 </div>
-                                                <button onClick={() => handleAbsoluteFinishProject(task.projectId, task.id)} className="w-full bg-gradient-to-r from-indigo-600 to-indigo-800 text-white font-black text-xs py-1.5 rounded-xl">Mark Book Complete & Archive</button>
+                                                <button onClick={() => handleAbsoluteFinishProject(task.projectId, task.id)} className="w-full bg-gradient-to-r from-slate-950 to-slate-900 text-rose-400 font-bold text-xs py-1.5 rounded-xl border border-slate-800/60">Mark Book Complete & Archive</button>
                                             </div>
                                         )}
                                     </div>
@@ -294,6 +286,38 @@
                         </div>
                     )}
 
+                    {/* TAB 2: RESTORED MASTER ACTIVE LIST VIEW */}
+                    {activeTab === "master-view" && (
+                        <div className="space-y-4">
+                            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">All Active Production Pipelines</h2>
+                            <div className="grid gap-3">
+                                {projects.filter(p => !p.isArchived).length === 0 ? <p className="text-slate-600 italic p-6 text-center">No active tracking pipelines found.</p> :
+                                projects.filter(p => !p.isArchived).map(p => (
+                                    <div key={p.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3">
+                                        <div className="flex justify-between items-center border-b border-slate-800/50 pb-2">
+                                            <span className="font-bold text-slate-200 text-sm">📚 {p.title}</span>
+                                            <span className="text-[10px] text-slate-500 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">Series: {p.series}</span>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Current Holders / Assignments:</p>
+                                            {p.tasks.map(t => (
+                                                <div key={t.id} className="text-xs bg-slate-950/60 p-2 rounded flex justify-between border border-slate-800/40">
+                                                    <div>
+                                                        <span className="text-slate-400 font-semibold">{t.assignee}</span>
+                                                        <span className="text-slate-600 mx-2">|</span>
+                                                        <span className="text-slate-400 italic text-[11px]">{t.name}</span>
+                                                    </div>
+                                                    <span className={`text-[9px] px-1.5 rounded font-bold uppercase h-fit ${t.status === "In Progress" ? "bg-amber-950/80 text-amber-400" : "bg-blue-950/80 text-blue-400"}`}>{t.status}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TAB 3: ARCHIVE LOGS VIEW */}
                     {activeTab === "archive-view" && (
                         <div className="space-y-4">
                             <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Finalized Production Archive Logs</h2>
@@ -304,7 +328,7 @@
                                     return (
                                         <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                                             <div className="p-4 flex justify-between items-center bg-slate-950/40">
-                                                <div className="flex-1 cursor-pointer" onClick={() => toggleArchiveLogs(p.id)}>
+                                                <div className="flex-1 cursor-pointer" onClick={() => setOpenArchiveLogs(prev => ({ ...prev, [p.id]: !isLogOpen }))}>
                                                     <div className="flex items-center gap-3">
                                                         <span className="text-sm font-bold text-slate-200">{p.title}</span>
                                                         <i className={`fa-solid text-slate-500 text-xs ${isLogOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
@@ -327,13 +351,13 @@
                                                                     </div>
                                                                     <div className="grid grid-cols-2 gap-2 mt-1.5 text-[10px] text-slate-500">
                                                                         <div><span className="text-slate-600">Assignee:</span> {h.assignee}</div>
-                                                                        <div className="text-right"><span className="text-slate-600">Received/Started:</span> {h.startDate || "N/A"}</div>
+                                                                        <div className="text-right"><span className="text-slate-600">Started:</span> {h.startDate || "N/A"}</div>
                                                                         <div className="col-span-2 text-right text-indigo-400"><span className="text-slate-600">Finished:</span> {h.endDate}</div>
                                                                     </div>
                                                                 </div>
                                                             ))}
                                                         </div>
-                                                    ) : <p className="text-[11px] text-slate-600 italic">No history dates saved inside this legacy file node.</p>}
+                                                    ) : <p className="text-[11px] text-slate-600 italic">No history dates saved.</p>}
                                                 </div>
                                             )}
                                         </div>
@@ -343,7 +367,7 @@
                         </div>
                     )}
 
-                    {/* Modals injection logic */}
+                    {/* MODAL: CREATE PROJECT */}
                     {isProjectModalOpen && (
                         <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
                             <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 text-xs space-y-3">
@@ -365,6 +389,7 @@
                         </div>
                     )}
 
+                    {/* MODAL: HANDOFF */}
                     {isHandOffModalOpen && (
                         <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
                             <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full text-xs">
@@ -377,6 +402,7 @@
                         </div>
                     )}
 
+                    {/* MODAL: PARALLEL */}
                     {isParallelModalOpen && (
                         <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
                             <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full text-xs">

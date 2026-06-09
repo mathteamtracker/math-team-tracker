@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Team Tracker (Ver 13 - Cloud Sync)</title>
+    <title>Math Team Tracker (Ver 14 - Cloud Sync)</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -419,7 +419,7 @@
                     <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-6 mb-8 gap-4">
                         <div>
                             <h1 class="text-3xl font-extrabold heading-font text-white tracking-tight flex items-center gap-2">
-                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 13</span>
+                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 14</span>
                             </h1>
                             <p class="text-slate-400 text-xs mt-0.5">Cloud-Synced Workflow Matrix</p>
                         </div>
@@ -553,7 +553,7 @@
                         </div>
                     )}
 
-                    {/* TAB 2: VIEW PER SERIES (WITH AUDIT TRAIL LOGS) */}
+                    {/* TAB 2: VIEW PER SERIES (WITH AUDIT TRAIL LOGS & DATE COMPLETED) */}
                     {activeTab === "series-view" && (
                         <div class="space-y-4">
                             {uniqueSeriesKeys.length === 0 ? (
@@ -600,16 +600,17 @@
                                                                 ))}
                                                             </div>
 
-                                                            {/* Project History Logs (Oldest Task sits at the very bottom) */}
+                                                            {/* Project History Logs (May kasama nang Completion Date) */}
                                                             {p.history && p.history.length > 0 && (
                                                                 <div class="pt-2 border-t border-slate-800/40 space-y-1">
                                                                     <span class="block text-[8px] font-bold uppercase tracking-wider text-slate-500">History Log (Oldest at bottom):</span>
                                                                     {p.history.map((h, i) => (
-                                                                        <div key={i} class="flex items-center justify-between text-[9px] bg-slate-950/40 px-3 py-1 rounded-lg border border-slate-900/40 opacity-70 gap-4">
+                                                                        <div key={i} class="flex items-center justify-between text-[9px] bg-slate-950/40 px-3 py-1.5 rounded-lg border border-slate-900/40 opacity-70 gap-4">
                                                                             <span class="text-slate-400 font-medium">{h.name}</span>
-                                                                            <div class="flex items-center gap-3 shrink-0">
+                                                                            <div class="flex items-center gap-3 shrink-0 font-mono text-[8px]">
                                                                                 <span class="text-slate-500 text-[9px]">👤 {h.assignee}</span>
-                                                                                <span class="text-emerald-500 bg-emerald-950/20 px-1.5 py-0.5 rounded text-[8px] border border-emerald-900/20">Done</span>
+                                                                                <span class="text-slate-500"><i class="fa-solid fa-calendar-check mr-1 opacity-60"></i>{h.endDate}</span>
+                                                                                <span class="text-emerald-500 bg-emerald-950/20 px-1.5 py-0.5 rounded text-[8px] font-bold border border-emerald-900/20">Done</span>
                                                                             </div>
                                                                         </div>
                                                                     ))}
@@ -626,7 +627,7 @@
                         </div>
                     )}
 
-                    {/* TAB 3: VIEW PER LEVEL (WITH AUDIT TRAIL LOGS) */}
+                    {/* TAB 3: VIEW PER LEVEL (WITH AUDIT TRAIL LOGS & DATE COMPLETED) */}
                     {activeTab === "level-view" && (
                         <div class="space-y-6">
                             <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -689,15 +690,18 @@
                                                                                     ))}
                                                                                 </div>
 
-                                                                                {/* Project History Logs (Oldest Task sits at the very bottom) */}
+                                                                                {/* Project History Logs (May kasama nang Completion Date) */}
                                                                                 {p.history && p.history.length > 0 && (
                                                                                     <div class="pt-2 mt-2 border-t border-slate-800/60 space-y-1">
                                                                                         <span class="block text-[8px] font-bold uppercase tracking-wider text-slate-500">History Log (Oldest at bottom):</span>
                                                                                         {p.history.map((h, i) => (
                                                                                             <div key={i} class="flex items-center justify-between text-[9px] bg-slate-900/30 p-1.5 rounded border border-slate-800/20 opacity-65 gap-2">
-                                                                                                <span class="text-slate-400 truncate max-w-[50%]">{h.name}</span>
-                                                                                                <span class="text-slate-500 text-[8px] shrink-0">👤 {h.assignee.split(" ")[0]}</span>
-                                                                                                <span class="text-slate-600 font-mono text-[8px] shrink-0">Done</span>
+                                                                                                <span class="text-slate-400 truncate max-w-[40%]">{h.name}</span>
+                                                                                                <div class="flex items-center gap-2 shrink-0 font-mono text-[8px]">
+                                                                                                    <span class="text-slate-500 text-[8px]">👤 {h.assignee.split(" ")[0]}</span>
+                                                                                                    <span class="text-slate-500">{h.endDate}</span>
+                                                                                                    <span class="text-emerald-500 font-bold text-[8px]">Done</span>
+                                                                                                </div>
                                                                                             </div>
                                                                                         ))}
                                                                                     </div>

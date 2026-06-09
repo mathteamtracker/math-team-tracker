@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Team Tracker (Ver 14 - Cloud Sync)</title>
+    <title>Math Team Tracker (Ver 15 - Cloud Sync)</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -44,7 +44,7 @@
             const [currentUser, setCurrentUser] = useState("");
             const [activeTab, setActiveTab] = useState("user-view");
             const [isLoading, setIsLoading] = useState(true);
-            const [isSaving, setIsSaving] = useState(false); // Global saving lock to prevent duplicates
+            const [isSaving, setIsSaving] = useState(false); 
 
             // Expansion states
             const [expandedSeries, setExpandedSeries] = useState({});
@@ -52,6 +52,7 @@
             const [expandedStages, setExpandedStages] = useState({});
             const [expandedWorkloadUsers, setExpandedWorkloadUsers] = useState({}); 
             const [expandedLevels, setExpandedLevels] = useState({}); 
+            const [expandedHistory, setExpandedHistory] = useState({}); // New state for history tracking
 
             const [lastHandOffAction, setLastHandOffAction] = useState(null);
 
@@ -93,7 +94,7 @@
             const loadCloudData = useCallback(async (showToast = false) => {
                 if (SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE" || isSaving) {
                     setIsLoading(false);
-                    return; // Abort background fetch if saving is in progress to prevent collision
+                    return; 
                 }
                 try {
                     const response = await fetch(`${SCRIPT_URL}?action=readAll`);
@@ -238,7 +239,6 @@
                 e.preventDefault();
                 if (!handOffTarget || isSaving) return;
 
-                // CRITICAL DUP FIX: Immediately extract and wipe context before doing async maps
                 const currentHandOffTarget = handOffTarget;
                 setHandOffTarget(null); 
                 setIsHandOffModalOpen(false);
@@ -253,7 +253,7 @@
                     if (p.id !== projectId) return p;
 
                     const targetTask = p.tasks.find(t => t.id === taskId);
-                    if (!targetTask) return p; // Defend against rerun loops
+                    if (!targetTask) return p; 
 
                     const completedTask = { ...targetTask, status: "Done", endDate: historyDate, completedAtTimestamp: timestamp };
                     const remainingTasks = p.tasks.filter(t => t.id !== taskId);
@@ -278,7 +278,7 @@
             const handleUndoHandOff = async () => {
                 if (!lastHandOffAction || isSaving) return;
                 const { projectId, originalTaskId, spawnedTaskId } = lastHandOffAction;
-                setLastHandOffAction(null); // Clear context immediately
+                setLastHandOffAction(null); 
 
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
@@ -388,12 +388,14 @@
             });
 
             const uniqueSeriesKeys = Array.from(new Set(projects.filter(p => !p.isArchived).map(p => p.series)));
+            
             const toggleTree = (type, key) => {
                 if (type === 'series') setExpandedSeries(p => ({ ...p, [key]: !p[key] }));
                 if (type === 'component') setExpandedComponents(p => ({ ...p, [key]: !p[key] }));
                 if (type === 'stage') setExpandedStages(p => ({ ...p, [key]: !p[key] }));
                 if (type === 'workloadUser') setExpandedWorkloadUsers(p => ({ ...p, [key]: !p[key] }));
                 if (type === 'level') setExpandedLevels(p => ({ ...p, [key]: !p[key] }));
+                if (type === 'history') setExpandedHistory(p => ({ ...p, [key]: !p[key] })); // Toggle function for history
             };
 
             if (isLoading) {
@@ -419,7 +421,7 @@
                     <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-6 mb-8 gap-4">
                         <div>
                             <h1 class="text-3xl font-extrabold heading-font text-white tracking-tight flex items-center gap-2">
-                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 14</span>
+                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 15</span>
                             </h1>
                             <p class="text-slate-400 text-xs mt-0.5">Cloud-Synced Workflow Matrix</p>
                         </div>
@@ -553,7 +555,7 @@
                         </div>
                     )}
 
-                    {/* TAB 2: VIEW PER SERIES (WITH AUDIT TRAIL LOGS & DATE COMPLETED) */}
+                    {/* TAB 2: VIEW PER SERIES (WITH EXPANDABLE HISTORY LOGS & LARGER FONT) */}
                     {activeTab === "series-view" && (
                         <div class="space-y-4">
                             {uniqueSeriesKeys.length === 0 ? (
@@ -600,20 +602,32 @@
                                                                 ))}
                                                             </div>
 
-                                                            {/* Project History Logs (May kasama nang Completion Date) */}
+                                                            {/* Expandable Project History Logs */}
                                                             {p.history && p.history.length > 0 && (
-                                                                <div class="pt-2 border-t border-slate-800/40 space-y-1">
-                                                                    <span class="block text-[8px] font-bold uppercase tracking-wider text-slate-500">History Log (Oldest at bottom):</span>
-                                                                    {p.history.map((h, i) => (
-                                                                        <div key={i} class="flex items-center justify-between text-[9px] bg-slate-950/40 px-3 py-1.5 rounded-lg border border-slate-900/40 opacity-70 gap-4">
-                                                                            <span class="text-slate-400 font-medium">{h.name}</span>
-                                                                            <div class="flex items-center gap-3 shrink-0 font-mono text-[8px]">
-                                                                                <span class="text-slate-500 text-[9px]">👤 {h.assignee}</span>
-                                                                                <span class="text-slate-500"><i class="fa-solid fa-calendar-check mr-1 opacity-60"></i>{h.endDate}</span>
-                                                                                <span class="text-emerald-500 bg-emerald-950/20 px-1.5 py-0.5 rounded text-[8px] font-bold border border-emerald-900/20">Done</span>
-                                                                            </div>
+                                                                <div class="pt-2 border-t border-slate-800/40 space-y-2">
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => toggleTree('history', p.id)}
+                                                                        class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-slate-200 transition"
+                                                                    >
+                                                                        <i class={`fa-solid ${expandedHistory[p.id] ? 'fa-chevron-down text-indigo-400' : 'fa-chevron-right text-slate-500'} text-[10px]`}></i>
+                                                                        History Log ({p.history.length})
+                                                                    </button>
+                                                                    
+                                                                    {expandedHistory[p.id] && (
+                                                                        <div class="space-y-1.5 pl-2">
+                                                                            {p.history.map((h, i) => (
+                                                                                <div key={i} class="flex flex-col sm:flex-row sm:items-center justify-between text-xs bg-slate-950/60 px-3 py-2 rounded-lg border border-slate-800/50 gap-2">
+                                                                                    <span class="text-slate-200 font-medium">{h.name}</span>
+                                                                                    <div class="flex flex-wrap items-center gap-2.5 font-mono text-slate-400 text-[11px] shrink-0">
+                                                                                        <span>👤 {h.assignee}</span>
+                                                                                        <span><i class="fa-solid fa-calendar-check mr-1 opacity-60"></i>{h.endDate}</span>
+                                                                                        <span class="text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded text-[10px] font-bold border border-emerald-900/40">Done</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
                                                                         </div>
-                                                                    ))}
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -627,7 +641,7 @@
                         </div>
                     )}
 
-                    {/* TAB 3: VIEW PER LEVEL (WITH AUDIT TRAIL LOGS & DATE COMPLETED) */}
+                    {/* TAB 3: VIEW PER LEVEL (WITH EXPANDABLE HISTORY LOGS & LARGER FONT) */}
                     {activeTab === "level-view" && (
                         <div class="space-y-6">
                             <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -690,20 +704,31 @@
                                                                                     ))}
                                                                                 </div>
 
-                                                                                {/* Project History Logs (May kasama nang Completion Date) */}
+                                                                                {/* Expandable Project History Logs */}
                                                                                 {p.history && p.history.length > 0 && (
-                                                                                    <div class="pt-2 mt-2 border-t border-slate-800/60 space-y-1">
-                                                                                        <span class="block text-[8px] font-bold uppercase tracking-wider text-slate-500">History Log (Oldest at bottom):</span>
-                                                                                        {p.history.map((h, i) => (
-                                                                                            <div key={i} class="flex items-center justify-between text-[9px] bg-slate-900/30 p-1.5 rounded border border-slate-800/20 opacity-65 gap-2">
-                                                                                                <span class="text-slate-400 truncate max-w-[40%]">{h.name}</span>
-                                                                                                <div class="flex items-center gap-2 shrink-0 font-mono text-[8px]">
-                                                                                                    <span class="text-slate-500 text-[8px]">👤 {h.assignee.split(" ")[0]}</span>
-                                                                                                    <span class="text-slate-500">{h.endDate}</span>
-                                                                                                    <span class="text-emerald-500 font-bold text-[8px]">Done</span>
-                                                                                                </div>
+                                                                                    <div class="pt-2 mt-2 border-t border-slate-800/60 space-y-2">
+                                                                                        <button 
+                                                                                            type="button"
+                                                                                            onClick={() => toggleTree('history', p.id)}
+                                                                                            class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-200 transition"
+                                                                                        >
+                                                                                            <i class={`fa-solid ${expandedHistory[p.id] ? 'fa-chevron-down text-indigo-400' : 'fa-chevron-right text-slate-500'} text-[10px]`}></i>
+                                                                                            History ({p.history.length})
+                                                                                        </button>
+                                                                                        
+                                                                                        {expandedHistory[p.id] && (
+                                                                                            <div class="space-y-1.5 pl-1">
+                                                                                                {p.history.map((h, i) => (
+                                                                                                    <div key={i} class="flex flex-col text-xs bg-slate-900/50 p-2 rounded border border-slate-800/30 gap-1">
+                                                                                                        <span class="text-slate-200 font-medium">{h.name}</span>
+                                                                                                        <div class="flex items-center justify-between font-mono text-[11px] text-slate-400 border-t border-slate-800/40 pt-1 mt-0.5">
+                                                                                                            <span>👤 {h.assignee.split(" ")[0]}</span>
+                                                                                                            <span>{h.endDate}</span>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                ))}
                                                                                             </div>
-                                                                                        ))}
+                                                                                        )}
                                                                                     </div>
                                                                                 )}
                                                                             </div>
@@ -771,7 +796,7 @@
                         </div>
                     )}
 
-                    {/* TAB 5: ARCHIVED CLOSED PROJECTS */}
+                    {/* TAB 5: ARCHIVED CLOSED PROJECTS (INCREASED FONT SIZE HERE TOO) */}
                     {activeTab === "archive-view" && (
                         <div class="space-y-4">
                             <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -796,14 +821,14 @@
                                         </div>
                                         
                                         <div class="space-y-1.5">
-                                            <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500">Historical Footprint Matrix:</span>
+                                            <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Historical Footprint Matrix:</span>
                                             {p.history && p.history.map((h, i) => (
-                                                <div key={i} class="bg-slate-950/60 border border-slate-800/40 p-2.5 rounded-xl flex justify-between text-[11px] items-center">
+                                                <div key={i} class="bg-slate-950/60 border border-slate-800/40 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
                                                     <div>
-                                                        <span class="font-semibold text-slate-300">{h.name}</span>
-                                                        <span class="text-slate-500 text-[10px] block">Executor: {h.assignee}</span>
+                                                        <span class="font-semibold text-slate-200">{h.name}</span>
+                                                        <span class="text-slate-400 text-[11px] block mt-0.5">Executor: {h.assignee}</span>
                                                     </div>
-                                                    <span class="text-slate-400 font-mono text-[10px]">{h.endDate || "Closed Cycle"}</span>
+                                                    <span class="text-slate-400 font-mono text-[11px] shrink-0">{h.endDate || "Closed Cycle"}</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -939,7 +964,7 @@
                                 <form onSubmit={executeParallelBranch} class="space-y-4">
                                     <div class="space-y-1.5">
                                         <label class="block text-[10px] font-black uppercase text-slate-400">Parallel Executor Agent</label>
-                                        <select value={parallelAssignee} onChange={(e) => setParallelAssignee(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-indigo-500 cursor-pointer">
+                                        <select value={parallel_assignee} onChange={(e) => setParallelAssignee(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-indigo-500 cursor-pointer">
                                             {users.map(u => <option key={u} value={u}>{u}</option>)}
                                         </select>
                                     </div>

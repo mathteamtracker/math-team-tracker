@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Team Tracker (Ver 12 - Cloud Sync)</title>
+    <title>Math Team Tracker (Ver 13 - Cloud Sync)</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -44,13 +44,14 @@
             const [currentUser, setCurrentUser] = useState("");
             const [activeTab, setActiveTab] = useState("user-view");
             const [isLoading, setIsLoading] = useState(true);
+            const [isSaving, setIsSaving] = useState(false); // Global saving lock to prevent duplicates
 
             // Expansion states
             const [expandedSeries, setExpandedSeries] = useState({});
             const [expandedComponents, setExpandedComponents] = useState({});
             const [expandedStages, setExpandedStages] = useState({});
             const [expandedWorkloadUsers, setExpandedWorkloadUsers] = useState({}); 
-            const [expandedLevels, setExpandedLevels] = useState({}); // New level view expansion state
+            const [expandedLevels, setExpandedLevels] = useState({}); 
 
             const [lastHandOffAction, setLastHandOffAction] = useState(null);
 
@@ -90,9 +91,9 @@
 
             // FETCH DATA FROM GOOGLE SHEETS
             const loadCloudData = useCallback(async (showToast = false) => {
-                if (SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE") {
+                if (SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE" || isSaving) {
                     setIsLoading(false);
-                    return;
+                    return; // Abort background fetch if saving is in progress to prevent collision
                 }
                 try {
                     const response = await fetch(`${SCRIPT_URL}?action=readAll`);
@@ -112,11 +113,12 @@
                 } finally {
                     setIsLoading(false);
                 }
-            }, [currentUser]);
+            }, [currentUser, isSaving]);
 
             // PUSH DATA TO GOOGLE SHEETS
             const syncToCloud = async (updatedProjects, updatedUsers) => {
                 if (SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE") return;
+                setIsSaving(true);
                 try {
                     await fetch(SCRIPT_URL, {
                         method: "POST",
@@ -132,6 +134,8 @@
                 } catch (error) {
                     console.error("Cloud push failed:", error);
                     triggerToast("❌ Failed syncing changes to cloud.");
+                } finally {
+                    setIsSaving(false);
                 }
             };
 
@@ -158,14 +162,9 @@
                 return new Date().toLocaleDateString('en-US', options);
             };
 
-            const getFormattedDateOnly = () => {
-                const options = { year: 'numeric', month: 'short', day: '2-digit' };
-                return new Date().toLocaleDateString('en-US', options);
-            };
-
             const handleAddMember = async (e) => {
                 e.preventDefault();
-                if (!newMemberName.trim() || !newMemberRole.trim()) return;
+                if (isSaving || !newMemberName.trim() || !newMemberRole.trim()) return;
                 const formattedUserString = `${newMemberName.trim()} (${newMemberRole.trim()})`;
                 if (users.includes(formattedUserString)) {
                     triggerToast("Member already exists!");
@@ -179,7 +178,7 @@
             };
 
             const handleRemoveMember = async (userToRemove) => {
-                if (users.length <= 1) {
+                if (isSaving || users.length <= 1) {
                     triggerToast("Cannot empty the roster!");
                     return;
                 }
@@ -189,6 +188,7 @@
             };
 
             const handleReceiveAndStart = async (projectId, taskId) => {
+                if (isSaving) return;
                 const taskName = definedTaskNames[`${projectId}-${taskId}`];
                 if (!taskName || !taskName.trim()) {
                     triggerToast("Please define the task description context first!");
@@ -214,7 +214,7 @@
 
             const saveEditedTaskName = async (e) => {
                 e.preventDefault();
-                if (!editTaskNameInput.trim() || !editTarget) return;
+                if (isSaving || !editTaskNameInput.trim() || !editTarget) return;
                 const updated = projects.map(p => {
                     if (p.id !== editTarget.projectId) return p;
                     return {
@@ -236,9 +236,14 @@
 
             const executeHandOff = async (e) => {
                 e.preventDefault();
-                if (!handOffTarget) return;
+                if (!handOffTarget || isSaving) return;
 
-                const { projectId, taskId } = handOffTarget;
+                // CRITICAL DUP FIX: Immediately extract and wipe context before doing async maps
+                const currentHandOffTarget = handOffTarget;
+                setHandOffTarget(null); 
+                setIsHandOffModalOpen(false);
+
+                const { projectId, taskId } = currentHandOffTarget;
                 const historyDate = getFormattedDateTime();
                 const timestamp = Date.now();
                 const nowFormatted = getFormattedDateTime();
@@ -248,6 +253,8 @@
                     if (p.id !== projectId) return p;
 
                     const targetTask = p.tasks.find(t => t.id === taskId);
+                    if (!targetTask) return p; // Defend against rerun loops
+
                     const completedTask = { ...targetTask, status: "Done", endDate: historyDate, completedAtTimestamp: timestamp };
                     const remainingTasks = p.tasks.filter(t => t.id !== taskId);
                     const shouldSpawnNextPlaceholder = !targetTask.isParallel && remainingTasks.filter(r => !r.isParallel).length === 0;
@@ -265,14 +272,13 @@
                 });
 
                 setProjects(updated);
-                setIsHandOffModalOpen(false);
-                setHandOffTarget(null);
                 await syncToCloud(updated, users);
             };
 
             const handleUndoHandOff = async () => {
-                if (!lastHandOffAction) return;
+                if (!lastHandOffAction || isSaving) return;
                 const { projectId, originalTaskId, spawnedTaskId } = lastHandOffAction;
+                setLastHandOffAction(null); // Clear context immediately
 
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
@@ -287,18 +293,18 @@
                 });
 
                 setProjects(updated);
-                setLastHandOffAction(null);
                 await syncToCloud(updated, users);
             };
 
             const handleAbsoluteFinishProject = async (projectId, taskId) => {
-                if (!window.confirm("Is this book module fully complete for archival closeout?")) return;
+                if (isSaving || !window.confirm("Is this book module fully complete for archival closeout?")) return;
                 const historyDate = getFormattedDateTime();
                 const timestamp = Date.now();
 
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
                     const targetTask = p.tasks.find(t => t.id === taskId);
+                    if (!targetTask) return p;
                     return {
                         ...p,
                         isArchived: true,
@@ -318,23 +324,28 @@
 
             const executeParallelBranch = async (e) => {
                 e.preventDefault();
-                if (!parallelTargetProjectId) return;
+                if (!parallelTargetProjectId || isSaving) return;
+
+                const targetProjId = parallelTargetProjectId;
+                setParallelTargetProjectId(null);
+                setIsParallelModalOpen(false);
 
                 const nowFormatted = getFormattedDateTime();
                 const updated = projects.map(p => {
-                    if (p.id !== parallelTargetProjectId) return p;
+                    if (p.id !== targetProjId) return p;
                     return {
                         ...p,
                         tasks: [...p.tasks, { id: `task-${Date.now()}`, name: `Awaiting parallel task details from recipient... (Sent: ${nowFormatted})`, status: "Pending Transfer", assignee: parallelAssignee, startDate: null, endDate: null, isParallel: true }]
                     };
                 });
                 setProjects(updated);
-                setIsParallelModalOpen(false);
                 await syncToCloud(updated, users);
             };
 
             const handleCreateProject = async (e) => {
                 e.preventDefault();
+                if (isSaving) return;
+
                 let seriesName = "";
                 if (seriesCreationMode === "new") {
                     if (!newSeriesInput.trim()) return;
@@ -377,8 +388,6 @@
             });
 
             const uniqueSeriesKeys = Array.from(new Set(projects.filter(p => !p.isArchived).map(p => p.series)));
-            const allAvailableLevelsGlobal = [...STAGE_LEVELS["PS"], ...STAGE_LEVELS["GS"], ...STAGE_LEVELS["JHS"], ...STAGE_LEVELS["SHS"]];
-
             const toggleTree = (type, key) => {
                 if (type === 'series') setExpandedSeries(p => ({ ...p, [key]: !p[key] }));
                 if (type === 'component') setExpandedComponents(p => ({ ...p, [key]: !p[key] }));
@@ -406,24 +415,17 @@
                         </div>
                     )}
 
-                    {SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE" && (
-                        <div class="bg-amber-950/40 border border-amber-500/30 p-4 rounded-xl text-xs text-amber-300 mb-6 flex items-center gap-2">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                            <span><strong>Setup Required:</strong> Please configure your Google Sheets Apps Script Web App URL to activate multi-user live synchronization.</span>
-                        </div>
-                    )}
-
                     {/* App Branding Top Bar */}
                     <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-6 mb-8 gap-4">
                         <div>
                             <h1 class="text-3xl font-extrabold heading-font text-white tracking-tight flex items-center gap-2">
-                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 9</span>
+                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 13</span>
                             </h1>
                             <p class="text-slate-400 text-xs mt-0.5">Cloud-Synced Workflow Matrix</p>
                         </div>
 
                         <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                            <button onClick={() => loadCloudData(true)} class="bg-slate-900 border border-slate-800 text-slate-400 px-3 py-2 rounded-xl text-xs font-bold hover:text-white transition">
+                            <button disabled={isSaving} onClick={() => loadCloudData(true)} class="bg-slate-900 border border-slate-800 text-slate-400 px-3 py-2 rounded-xl text-xs font-bold hover:text-white transition disabled:opacity-40">
                                 <i class="fa-solid fa-arrows-rotate mr-1"></i> Refresh
                             </button>
                             <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-2.5">
@@ -443,7 +445,7 @@
                         </div>
                     </header>
 
-                    {/* Navigation Dashboard System */}
+                    {/* Navigation Tabs */}
                     <div class="flex flex-wrap gap-2 border-b border-slate-800 mb-8 bg-slate-900 p-1 rounded-xl w-full">
                         <button onClick={() => setActiveTab("user-view")} class={`px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'user-view' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
                             <i class="fa-solid fa-tray text-indigo-400"></i> My Plate ({currentUser ? currentUser.split(" ")[0] : ""})
@@ -475,7 +477,7 @@
                                             <p class="text-[10px] text-slate-400">Revert changes and recover your task from {lastHandOffAction.recipient.split(" ")[0]} instantly.</p>
                                         </div>
                                     </div>
-                                    <button onClick={handleUndoHandOff} class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs px-4 py-2 rounded-xl transition shadow flex items-center gap-1.5 w-full sm:w-auto justify-center">
+                                    <button disabled={isSaving} onClick={handleUndoHandOff} class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs px-4 py-2 rounded-xl transition shadow flex items-center gap-1.5 w-full sm:w-auto justify-center disabled:opacity-50">
                                         Undo Last Hand-off
                                     </button>
                                 </div>
@@ -517,7 +519,7 @@
                                                         </div>
                                                     ) : (
                                                         <div class="mb-4 bg-slate-950/30 border border-slate-800/40 p-3 rounded-xl relative">
-                                                            <h3 class="text-xs font-bold text-slate-200 mb-1 pr-14"/>{task.name}
+                                                            <h3 class="text-xs font-bold text-slate-200 mb-1 pr-14">{task.name}</h3>
                                                             <p class="text-[9px] text-slate-500"><i class="fa-solid fa-clock mr-1"></i> Triggered: {task.startDate}</p>
                                                             <button onClick={() => openEditTaskModal(task.projectId, task.id, task.name)} class="absolute right-2 top-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[9px] px-1.5 py-0.5 rounded">Edit</button>
                                                         </div>
@@ -526,18 +528,18 @@
 
                                                 <div class="flex gap-2 pt-2 border-t border-slate-800/60 mt-auto">
                                                     {task.status === "Pending Transfer" ? (
-                                                        <button onClick={() => handleReceiveAndStart(task.projectId, task.id)} class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg transition flex items-center gap-1 w-full justify-center">
+                                                        <button disabled={isSaving} onClick={() => handleReceiveAndStart(task.projectId, task.id)} class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg transition flex items-center gap-1 w-full justify-center disabled:opacity-50">
                                                             <i class="fa-solid fa-play"></i> Receive & Start Action
                                                         </button>
                                                     ) : (
                                                         <React.Fragment>
-                                                            <button onClick={() => handleDoneClick(task.projectId, task.id)} class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg transition flex items-center gap-1 flex-1 justify-center">
+                                                            <button disabled={isSaving} onClick={() => handleDoneClick(task.projectId, task.id)} class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg transition flex items-center gap-1 flex-1 justify-center disabled:opacity-50">
                                                                 <i class="fa-solid fa-check"></i> Hand-off / Done
                                                             </button>
-                                                            <button onClick={() => openParallelModal(task.projectId)} class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 border border-slate-700">
+                                                            <button disabled={isSaving} onClick={() => openParallelModal(task.projectId)} class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 border border-slate-700 disabled:opacity-50">
                                                                 <i class="fa-solid fa-code-branch"></i> Parallel
                                                             </button>
-                                                            <button onClick={() => handleAbsoluteFinishProject(task.projectId, task.id)} class="bg-rose-950/40 hover:bg-rose-900 border border-rose-900/40 text-rose-400 font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition">
+                                                            <button disabled={isSaving} onClick={() => handleAbsoluteFinishProject(task.projectId, task.id)} class="bg-rose-950/40 hover:bg-rose-900 border border-rose-900/40 text-rose-400 font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition disabled:opacity-50">
                                                                 Archive Closeout
                                                             </button>
                                                         </React.Fragment>
@@ -551,7 +553,7 @@
                         </div>
                     )}
 
-                    {/* TAB 2: VIEW PER SERIES (COLLAPSIBLE) */}
+                    {/* TAB 2: VIEW PER SERIES (WITH AUDIT TRAIL LOGS) */}
                     {activeTab === "series-view" && (
                         <div class="space-y-4">
                             {uniqueSeriesKeys.length === 0 ? (
@@ -577,22 +579,42 @@
                                             {isExpanded && (
                                                 <div class="p-4 bg-slate-950/50 border-t border-slate-800/60 space-y-3">
                                                     {matchingProjects.map(p => (
-                                                        <div key={p.id} class="bg-slate-900 border border-slate-800 p-3.5 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-                                                            <div>
+                                                        <div key={p.id} class="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3">
+                                                            <div class="flex justify-between items-center border-b border-slate-800/40 pb-2">
                                                                 <h4 class="text-xs font-extrabold text-slate-200 flex items-center gap-2">
                                                                     <span>📚 {p.title}</span>
                                                                     <span class={`text-[8px] font-black px-1.5 py-0.5 rounded border ${getStageBadgeStyle(p.stageColor)}`}>{p.stageColor}</span>
                                                                 </h4>
                                                             </div>
-                                                            <div class="w-full md:w-auto space-y-1.5">
+                                                            
+                                                            {/* Current/Active Status */}
+                                                            <div class="space-y-1.5">
                                                                 {p.tasks.map(t => (
                                                                     <div key={t.id} class="flex items-center justify-between text-[10px] bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800/80 gap-4">
                                                                         <span class="text-slate-300 font-medium">{t.name}</span>
-                                                                        <span class="text-slate-400 font-bold">👤 {t.assignee}</span>
-                                                                        <span class="text-amber-400 font-black px-1.5 rounded bg-amber-950/40 text-[9px]">{t.status}</span>
+                                                                        <div class="flex items-center gap-3 shrink-0">
+                                                                            <span class="text-slate-400 font-bold">👤 {t.assignee}</span>
+                                                                            <span class="text-amber-400 font-black px-1.5 rounded bg-amber-950/40 text-[9px]">{t.status === "Pending Transfer" ? "📥 Incoming" : t.status}</span>
+                                                                        </div>
                                                                     </div>
                                                                 ))}
                                                             </div>
+
+                                                            {/* Project History Logs (Oldest Task sits at the very bottom) */}
+                                                            {p.history && p.history.length > 0 && (
+                                                                <div class="pt-2 border-t border-slate-800/40 space-y-1">
+                                                                    <span class="block text-[8px] font-bold uppercase tracking-wider text-slate-500">History Log (Oldest at bottom):</span>
+                                                                    {p.history.map((h, i) => (
+                                                                        <div key={i} class="flex items-center justify-between text-[9px] bg-slate-950/40 px-3 py-1 rounded-lg border border-slate-900/40 opacity-70 gap-4">
+                                                                            <span class="text-slate-400 font-medium">{h.name}</span>
+                                                                            <div class="flex items-center gap-3 shrink-0">
+                                                                                <span class="text-slate-500 text-[9px]">👤 {h.assignee}</span>
+                                                                                <span class="text-emerald-500 bg-emerald-950/20 px-1.5 py-0.5 rounded text-[8px] border border-emerald-900/20">Done</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -604,7 +626,7 @@
                         </div>
                     )}
 
-                    {/* TAB 3: VIEW PER LEVEL (COLLAPSIBLE - UPDATED) */}
+                    {/* TAB 3: VIEW PER LEVEL (WITH AUDIT TRAIL LOGS) */}
                     {activeTab === "level-view" && (
                         <div class="space-y-6">
                             <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -646,22 +668,40 @@
                                                                 <div class="grid gap-2 sm:grid-cols-2">
                                                                     {levelProjects.map(p => (
                                                                         <div key={p.id} class="bg-slate-950 border border-slate-800/80 p-3 rounded-lg flex flex-col justify-between gap-2">
-                                                                            <div class="flex justify-between items-start gap-2">
-                                                                                <span class="text-xs font-bold text-slate-200 truncate block max-w-[75%]">📚 {p.title}</span>
-                                                                                <span class={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${getStageBadgeStyle(p.stageColor)}`}>
-                                                                                    {p.stageColor}
-                                                                                </span>
-                                                                            </div>
-                                                                            <div class="space-y-1">
-                                                                                {p.tasks.map(t => (
-                                                                                    <div key={t.id} class="flex items-center justify-between text-[10px] bg-slate-900/60 p-1.5 rounded border border-slate-800/30">
-                                                                                        <span class="text-slate-300 truncate max-w-[50%]">{t.name}</span>
-                                                                                        <span class="text-slate-400 font-semibold text-[9px]">👤 {t.assignee.split(" ")[0]}</span>
-                                                                                        <span class="text-amber-400 font-bold px-1 rounded bg-amber-950/40 text-[9px] shrink-0">
-                                                                                            {t.status === "Pending Transfer" ? "📥 Incoming" : t.status}
-                                                                                        </span>
+                                                                            <div>
+                                                                                <div class="flex justify-between items-start gap-2 mb-2">
+                                                                                    <span class="text-xs font-bold text-slate-200 truncate block max-w-[75%]">📚 {p.title}</span>
+                                                                                    <span class={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${getStageBadgeStyle(p.stageColor)}`}>
+                                                                                        {p.stageColor}
+                                                                                    </span>
+                                                                                </div>
+                                                                                
+                                                                                {/* Active Tasks Status */}
+                                                                                <div class="space-y-1">
+                                                                                    {p.tasks.map(t => (
+                                                                                        <div key={t.id} class="flex items-center justify-between text-[10px] bg-slate-900/60 p-1.5 rounded border border-slate-800/30">
+                                                                                            <span class="text-slate-300 truncate max-w-[50%]">{t.name}</span>
+                                                                                            <span class="text-slate-400 font-semibold text-[9px]">👤 {t.assignee.split(" ")[0]}</span>
+                                                                                            <span class="text-amber-400 font-bold px-1 rounded bg-amber-950/40 text-[9px] shrink-0">
+                                                                                                {t.status === "Pending Transfer" ? "📥 Incoming" : t.status}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+
+                                                                                {/* Project History Logs (Oldest Task sits at the very bottom) */}
+                                                                                {p.history && p.history.length > 0 && (
+                                                                                    <div class="pt-2 mt-2 border-t border-slate-800/60 space-y-1">
+                                                                                        <span class="block text-[8px] font-bold uppercase tracking-wider text-slate-500">History Log (Oldest at bottom):</span>
+                                                                                        {p.history.map((h, i) => (
+                                                                                            <div key={i} class="flex items-center justify-between text-[9px] bg-slate-900/30 p-1.5 rounded border border-slate-800/20 opacity-65 gap-2">
+                                                                                                <span class="text-slate-400 truncate max-w-[50%]">{h.name}</span>
+                                                                                                <span class="text-slate-500 text-[8px] shrink-0">👤 {h.assignee.split(" ")[0]}</span>
+                                                                                                <span class="text-slate-600 font-mono text-[8px] shrink-0">Done</span>
+                                                                                            </div>
+                                                                                        ))}
                                                                                     </div>
-                                                                                ))}
+                                                                                )}
                                                                             </div>
                                                                         </div>
                                                                     ))}
@@ -678,7 +718,7 @@
                         </div>
                     )}
 
-                    {/* TAB 4: USERS WORKLOAD CAPACITY (COLLAPSIBLE) */}
+                    {/* TAB 4: USERS WORKLOAD CAPACITY */}
                     {activeTab === "workload-view" && (
                         <div class="space-y-4">
                             {users.map(u => {
@@ -830,7 +870,7 @@
 
                                     <div class="flex gap-2 pt-2 border-t border-slate-800">
                                         <button type="button" onClick={() => setIsProjectModalOpen(false)} class="flex-1 bg-slate-950 hover:bg-slate-800 text-slate-400 font-bold text-xs py-2.5 rounded-xl transition">Cancel</button>
-                                        <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-lg">Deploy Matrix</button>
+                                        <button type="submit" disabled={isSaving} class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-lg disabled:opacity-50">Deploy Matrix</button>
                                     </div>
                                 </form>
                             </div>
@@ -851,7 +891,7 @@
                                     </div>
                                     <div class="flex gap-2 pt-2 border-t border-slate-800">
                                         <button type="button" onClick={() => { setIsHandOffModalOpen(false); setHandOffTarget(null); }} class="flex-1 bg-slate-950 hover:bg-slate-800 text-slate-400 font-bold text-xs py-2.5 rounded-xl transition">Hold Back</button>
-                                        <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-lg">Confirm Transfer</button>
+                                        <button type="submit" disabled={isSaving} class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-lg disabled:opacity-50">Confirm Transfer</button>
                                     </div>
                                 </form>
                             </div>
@@ -871,7 +911,7 @@
                                     <div class="col-span-2 text-[10px] font-black text-indigo-400 uppercase tracking-wide">Add Roster Node:</div>
                                     <input type="text" placeholder="Name (e.g. Sarah)" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none" required />
                                     <input type="text" placeholder="Role (e.g. Reviewer)" value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none" required />
-                                    <button type="submit" class="col-span-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-1.5 rounded-lg transition mt-1">Inject Roster Element</button>
+                                    <button type="submit" disabled={isSaving} class="col-span-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-1.5 rounded-lg transition mt-1 disabled:opacity-50">Inject Roster Element</button>
                                 </form>
 
                                 <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
@@ -879,7 +919,7 @@
                                     {users.map(u => (
                                         <div key={u} class="flex justify-between items-center bg-slate-950/40 border border-slate-800/80 px-3 py-2 rounded-xl text-xs">
                                             <span class="font-medium text-slate-300">{u}</span>
-                                            <button type="button" onClick={() => handleRemoveMember(u)} class="text-rose-500 hover:text-rose-400 text-[10px] font-bold"><i class="fa-solid fa-trash-can"></i></button>
+                                            <button type="button" disabled={isSaving} onClick={() => handleRemoveMember(u)} class="text-rose-500 hover:text-rose-400 text-[10px] font-bold disabled:opacity-40"><i class="fa-solid fa-trash-can"></i></button>
                                         </div>
                                     ))}
                                 </div>
@@ -901,7 +941,7 @@
                                     </div>
                                     <div class="flex gap-2 pt-2 border-t border-slate-800">
                                         <button type="button" onClick={() => { setIsParallelModalOpen(false); setParallelTargetProjectId(null); }} class="flex-1 bg-slate-950 hover:bg-slate-800 text-slate-400 font-bold text-xs py-2.5 rounded-xl transition">Abort Fork</button>
-                                        <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-lg">Deploy Parallel Node</button>
+                                        <button type="submit" disabled={isSaving} class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-lg disabled:opacity-50">Deploy Parallel Node</button>
                                     </div>
                                 </form>
                             </div>
@@ -920,7 +960,7 @@
                                     </div>
                                     <div class="flex gap-2 pt-2 border-t border-slate-800">
                                         <button type="button" onClick={() => { setIsEditModalOpen(false); setEditTarget(null); }} class="flex-1 bg-slate-950 hover:bg-slate-800 text-slate-400 font-bold text-xs py-2.5 rounded-xl transition">Discard</button>
-                                        <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-lg">Save Metadata</button>
+                                        <button type="submit" disabled={isSaving} class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2.5 rounded-xl transition shadow-lg disabled:opacity-50">Save Metadata</button>
                                     </div>
                                 </form>
                             </div>

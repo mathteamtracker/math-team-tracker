@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Team Tracker (Ver 9.2.3 - Clean Baseline)</title>
+    <title>Math Team Tracker (Ver 9.2.4 - Complete Master Baseline)</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.10/babel.min.js"></script>
@@ -42,8 +42,12 @@
             const [users, setUsers] = useState(DEFAULT_USERS);
             const [projects, setProjects] = useState([]);
             const [currentUser, setCurrentUser] = useState("");
-            const [activeTab, setActiveTab] = useState("user-view"); // Options: user-view, master-view, archive-view
+            const [activeTab, setActiveTab] = useState("user-view"); 
             const [isLoading, setIsLoading] = useState(true);
+
+            // Filter States for Master View (RESTORATION FROM V9)
+            const [selectedSeriesFilter, setSelectedSeriesFilter] = useState("ALL");
+            const [selectedStageFilter, setSelectedStageFilter] = useState("ALL");
 
             // Toggles & Modals
             const [openArchiveLogs, setOpenArchiveLogs] = useState({});
@@ -213,12 +217,23 @@
                 const updated = [newProj, ...projects]; setProjects(updated); setIsProjectModalOpen(false); await syncToCloud(updated, users);
             };
 
-            // Workload calculation
+            // Workload Extraction
             const myPlateTasks = [];
             projects.forEach(p => {
                 if (!p.isArchived) {
                     p.tasks.forEach(t => { if (t.assignee === currentUser) myPlateTasks.push({ projectId: p.id, projectTitle: p.title, ...t }); });
                 }
+            });
+
+            // Dynamic Unique Lists for Filters
+            const uniqueSeriesList = ["ALL", ...Array.from(new Set(projects.map(p => p.series)))];
+
+            // Master Filter Logic (RESTORATION APPLIED)
+            const filteredMasterProjects = projects.filter(p => {
+                if (p.isArchived) return false;
+                const matchSeries = selectedSeriesFilter === "ALL" || p.series === selectedSeriesFilter;
+                const matchStage = selectedStageFilter === "ALL" || p.stage === selectedStageFilter;
+                return matchSeries && matchStage;
             });
 
             if (isLoading) return <div className="flex flex-col items-center justify-center min-h-screen bg-[#080B10] text-slate-400 font-bold">Loading Production Matrix Base...</div>;
@@ -242,7 +257,7 @@
                         </div>
                     </header>
 
-                    {/* THREE restored baseline tabs (No Restriction) */}
+                    {/* Navigation Tab Bar */}
                     <div className="flex flex-wrap gap-2 border-b border-slate-800 mb-8 bg-slate-900 p-1 rounded-xl w-full">
                         <button onClick={() => setActiveTab("user-view")} className={`px-4 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'user-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>My Plate ({myPlateTasks.length})</button>
                         <button onClick={() => setActiveTab("master-view")} className={`px-4 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'master-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>All Active Tracks ({projects.filter(p=>!p.isArchived).length})</button>
@@ -286,140 +301,39 @@
                         </div>
                     )}
 
-                    {/* TAB 2: RESTORED MASTER ACTIVE LIST VIEW */}
+                    {/* TAB 2: FULLY RESTORED MASTER VIEW WITH DYNAMIC FILTER BUTTONS */}
                     {activeTab === "master-view" && (
-                        <div className="space-y-4">
-                            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">All Active Production Pipelines</h2>
-                            <div className="grid gap-3">
-                                {projects.filter(p => !p.isArchived).length === 0 ? <p className="text-slate-600 italic p-6 text-center">No active tracking pipelines found.</p> :
-                                projects.filter(p => !p.isArchived).map(p => (
-                                    <div key={p.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3">
-                                        <div className="flex justify-between items-center border-b border-slate-800/50 pb-2">
-                                            <span className="font-bold text-slate-200 text-sm">📚 {p.title}</span>
-                                            <span className="text-[10px] text-slate-500 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">Series: {p.series}</span>
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Current Holders / Assignments:</p>
-                                            {p.tasks.map(t => (
-                                                <div key={t.id} className="text-xs bg-slate-950/60 p-2 rounded flex justify-between border border-slate-800/40">
-                                                    <div>
-                                                        <span className="text-slate-400 font-semibold">{t.assignee}</span>
-                                                        <span className="text-slate-600 mx-2">|</span>
-                                                        <span className="text-slate-400 italic text-[11px]">{t.name}</span>
-                                                    </div>
-                                                    <span className={`text-[9px] px-1.5 rounded font-bold uppercase h-fit ${t.status === "In Progress" ? "bg-amber-950/80 text-amber-400" : "bg-blue-950/80 text-blue-400"}`}>{t.status}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
+                        <div className="space-y-6">
+                            
+                            {/* Filter Block 1: Per Series */}
+                            <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl space-y-2">
+                                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block"><i className="fa-solid fa-tags mr-1"></i> Filter Per Series:</span>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {uniqueSeriesList.map(series => (
+                                        <button key={series} onClick={() => setSelectedSeriesFilter(series)} className={`px-3 py-1 rounded-lg font-bold text-xs border transition ${selectedSeriesFilter === series ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'}`}>{series}</button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
 
-                    {/* TAB 3: ARCHIVE LOGS VIEW */}
-                    {activeTab === "archive-view" && (
-                        <div className="space-y-4">
-                            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Finalized Production Archive Logs</h2>
-                            <div className="grid gap-3">
-                                {projects.filter(p => p.isArchived).length === 0 ? <p className="text-center p-10 text-slate-700 italic">No archived tracks available.</p> : 
-                                projects.filter(p => p.isArchived).map(p => {
-                                    const isLogOpen = !!openArchiveLogs[p.id];
-                                    return (
-                                        <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                                            <div className="p-4 flex justify-between items-center bg-slate-950/40">
-                                                <div className="flex-1 cursor-pointer" onClick={() => setOpenArchiveLogs(prev => ({ ...prev, [p.id]: !isLogOpen }))}>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-sm font-bold text-slate-200">{p.title}</span>
-                                                        <i className={`fa-solid text-slate-500 text-xs ${isLogOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
-                                                    </div>
-                                                    <div className="text-[10px] text-slate-500 mt-0.5">Click to expand processing history dates ({p.history ? p.history.length : 0} logs)</div>
-                                                </div>
-                                                <button onClick={() => handleUnarchive(p.id)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-[10px] font-black transition ml-4"><i className="fa-solid fa-rotate-left mr-1"></i> Restore</button>
-                                            </div>
-                                            
-                                            {isLogOpen && (
-                                                <div className="p-4 bg-slate-950/80 border-t border-slate-800/60 space-y-3">
-                                                    <h4 className="text-[10px] uppercase font-black tracking-widest text-indigo-400">Task Completion Logs:</h4>
-                                                    {p.history && p.history.length > 0 ? (
-                                                        <div className="space-y-2 border-l-2 border-slate-800 pl-4 ml-2">
-                                                            {p.history.map((h, index) => (
-                                                                <div key={index} className="text-xs bg-slate-900/60 p-2.5 rounded border border-slate-800/40">
-                                                                    <div className="flex justify-between font-bold text-slate-300">
-                                                                        <span>{h.name}</span>
-                                                                        <span className="text-[10px] text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded uppercase">Done</span>
-                                                                    </div>
-                                                                    <div className="grid grid-cols-2 gap-2 mt-1.5 text-[10px] text-slate-500">
-                                                                        <div><span className="text-slate-600">Assignee:</span> {h.assignee}</div>
-                                                                        <div className="text-right"><span className="text-slate-600">Started:</span> {h.startDate || "N/A"}</div>
-                                                                        <div className="col-span-2 text-right text-indigo-400"><span className="text-slate-600">Finished:</span> {h.endDate}</div>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : <p className="text-[11px] text-slate-600 italic">No history dates saved.</p>}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
+                            {/* Filter Block 2: Per Level / Stage */}
+                            <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl space-y-2">
+                                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block"><i className="fa-solid fa-layer-group mr-1"></i> Filter Per Level/Stage:</span>
+                                <div className="flex flex-wrap gap-1.5">
+                                    <button onClick={() => setSelectedStageFilter("ALL")} className={`px-3 py-1 rounded-lg font-bold text-xs border transition ${selectedStageFilter === "ALL" ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'}`}>ALL LEVELS</button>
+                                    {STAGES.map(stage => (
+                                        <button key={stage} onClick={() => setSelectedStageFilter(stage)} className={`px-3 py-1 rounded-lg font-bold text-xs border transition ${selectedStageFilter === stage ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'}`}>{stage}</button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
 
-                    {/* MODAL: CREATE PROJECT */}
-                    {isProjectModalOpen && (
-                        <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 text-xs space-y-3">
-                                <h3 className="text-sm font-bold text-slate-100">Architect New Module</h3>
-                                <form onSubmit={handleCreateProject} className="space-y-3">
-                                    <div className="flex gap-4 bg-slate-950 p-2 rounded">
-                                        <label><input type="radio" checked={seriesCreationMode === "new"} onChange={() => setSeriesCreationMode("new")} /> New Series</label>
-                                        <label><input type="radio" checked={seriesCreationMode === "existing"} onChange={() => setSeriesCreationMode("existing")} /> Existing Series</label>
-                                    </div>
-                                    {seriesCreationMode === "new" ? <input type="text" required placeholder="Series Code (e.g. NCM)" value={newSeriesInput} onChange={(e) => setNewSeriesInput(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded" /> :
-                                    <select value={selectedExistingSeries} onChange={(e) => setSelectedExistingSeries(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{Array.from(new Set(projects.map(p => p.series))).map(x => <option key={x} value={x}>{x}</option>)}</select>}
-                                    <select value={selectedComponent} onChange={(e) => setSelectedComponent(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{COMPONENTS.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                                    <select value={selectedStage} onChange={(e) => setSelectedStage(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{STAGES.map(s => <option key={s} value={s}>{s}</option>)}</select>
-                                    <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{STAGE_LEVELS[selectedStage].map(l => <option key={l} value={l}>{l}</option>)}</select>
-                                    <select value={firstAssignee} onChange={(e) => setFirstAssignee(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{users.map(u => <option key={u} value={u}>{u}</option>)}</select>
-                                    <div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setIsProjectModalOpen(false)}>Cancel</button><button type="submit" className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg font-bold">Deploy Module</button></div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL: HANDOFF */}
-                    {isHandOffModalOpen && (
-                        <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
-                            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full text-xs">
-                                <h3 className="text-sm font-bold mb-3">➡️ Hand-Off Module Assignment</h3>
-                                <form onSubmit={executeHandOff} className="space-y-4">
-                                    <select value={nextAssignee} onChange={(e) => setNextAssignee(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded font-bold text-slate-200">{users.map(u => <option key={u} value={u}>{u}</option>)}</select>
-                                    <div className="flex justify-end gap-2"><button type="button" onClick={() => setIsHandOffModalOpen(false)}>Cancel</button><button type="submit" className="bg-indigo-600 text-white px-4 py-1.5 rounded">Confirm Transfer</button></div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL: PARALLEL */}
-                    {isParallelModalOpen && (
-                        <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
-                            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full text-xs">
-                                <h3 className="text-sm font-bold mb-3">Deploy Simultaneous Workflow</h3>
-                                <form onSubmit={executeParallelBranch} className="space-y-4">
-                                    <select value={parallelAssignee} onChange={(e) => setParallelAssignee(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded">{users.map(u => <option key={u} value={u}>{u}</option>)}</select>
-                                    <div className="flex justify-end gap-2"><button type="button" onClick={() => setIsParallelModalOpen(false)}>Cancel</button><button type="submit" className="bg-indigo-600 text-white px-4 py-1.5 rounded">Deploy</button></div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                            {/* Pipeline Section Output */}
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center px-1">
+                                    <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Active Track Matrix ({filteredMasterProjects.length} visible)</h2>
+                                    {(selectedSeriesFilter !== "ALL" || selectedStageFilter !== "ALL") && (
+                                        <button onClick={() => { setSelectedSeriesFilter("ALL"); setSelectedStageFilter("ALL"); }} className="text-[10px] text-indigo-400 hover:underline font-bold">Clear Filters</button>
+                                    )}
+                                </div>
+                                
+                                {filteredMasterProjects.length === 0 ? <p className="text-slate-600 italic p-10 text-center bg-slate-900/20 border border-slate-800/50 rounded-xl">No active tracks match your selected filter matrix.</p> :
+                                filteredMasterProjects.map(

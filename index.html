@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Team Tracker (Ver 15 - Cloud Sync)</title>
+    <title>Math Team Tracker (Ver 16 - Cloud Sync)</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -52,7 +52,7 @@
             const [expandedStages, setExpandedStages] = useState({});
             const [expandedWorkloadUsers, setExpandedWorkloadUsers] = useState({}); 
             const [expandedLevels, setExpandedLevels] = useState({}); 
-            const [expandedHistory, setExpandedHistory] = useState({}); // New state for history tracking
+            const [expandedHistory, setExpandedHistory] = useState({}); 
 
             const [lastHandOffAction, setLastHandOffAction] = useState(null);
 
@@ -395,7 +395,7 @@
                 if (type === 'stage') setExpandedStages(p => ({ ...p, [key]: !p[key] }));
                 if (type === 'workloadUser') setExpandedWorkloadUsers(p => ({ ...p, [key]: !p[key] }));
                 if (type === 'level') setExpandedLevels(p => ({ ...p, [key]: !p[key] }));
-                if (type === 'history') setExpandedHistory(p => ({ ...p, [key]: !p[key] })); // Toggle function for history
+                if (type === 'history') setExpandedHistory(p => ({ ...p, [key]: !p[key] })); 
             };
 
             if (isLoading) {
@@ -421,7 +421,7 @@
                     <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-6 mb-8 gap-4">
                         <div>
                             <h1 class="text-3xl font-extrabold heading-font text-white tracking-tight flex items-center gap-2">
-                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 15</span>
+                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 16</span>
                             </h1>
                             <p class="text-slate-400 text-xs mt-0.5">Cloud-Synced Workflow Matrix</p>
                         </div>
@@ -555,7 +555,7 @@
                         </div>
                     )}
 
-                    {/* TAB 2: VIEW PER SERIES (WITH EXPANDABLE HISTORY LOGS & LARGER FONT) */}
+                    {/* TAB 2: VIEW PER SERIES (TIME STAMP REMOVED FROM HISTORY) */}
                     {activeTab === "series-view" && (
                         <div class="space-y-4">
                             {uniqueSeriesKeys.length === 0 ? (
@@ -621,7 +621,7 @@
                                                                                     <span class="text-slate-200 font-medium">{h.name}</span>
                                                                                     <div class="flex flex-wrap items-center gap-2.5 font-mono text-slate-400 text-[11px] shrink-0">
                                                                                         <span>👤 {h.assignee}</span>
-                                                                                        <span><i class="fa-solid fa-calendar-check mr-1 opacity-60"></i>{h.endDate}</span>
+                                                                                        <span><i class="fa-solid fa-calendar-check mr-1 opacity-60"></i>{h.endDate ? h.endDate.split(',')[0] : ""}</span>
                                                                                         <span class="text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded text-[10px] font-bold border border-emerald-900/40">Done</span>
                                                                                     </div>
                                                                                 </div>
@@ -641,7 +641,7 @@
                         </div>
                     )}
 
-                    {/* TAB 3: VIEW PER LEVEL (WITH EXPANDABLE HISTORY LOGS & LARGER FONT) */}
+                    {/* TAB 3: VIEW PER LEVEL (TIME STAMP REMOVED FROM HISTORY) */}
                     {activeTab === "level-view" && (
                         <div class="space-y-6">
                             <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -723,7 +723,7 @@
                                                                                                         <span class="text-slate-200 font-medium">{h.name}</span>
                                                                                                         <div class="flex items-center justify-between font-mono text-[11px] text-slate-400 border-t border-slate-800/40 pt-1 mt-0.5">
                                                                                                             <span>👤 {h.assignee.split(" ")[0]}</span>
-                                                                                                            <span>{h.endDate}</span>
+                                                                                                            <span>{h.endDate ? h.endDate.split(',')[0] : ""}</span>
                                                                                                         </div>
                                                                                                     </div>
                                                                                                 ))}
@@ -796,7 +796,7 @@
                         </div>
                     )}
 
-                    {/* TAB 5: ARCHIVED CLOSED PROJECTS (INCREASED FONT SIZE HERE TOO) */}
+                    {/* TAB 5: ARCHIVED CLOSED PROJECTS (TIME STAMP REMOVED MULA SA FOOTPRINT) */}
                     {activeTab === "archive-view" && (
                         <div class="space-y-4">
                             <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -828,7 +828,9 @@
                                                         <span class="font-semibold text-slate-200">{h.name}</span>
                                                         <span class="text-slate-400 text-[11px] block mt-0.5">Executor: {h.assignee}</span>
                                                     </div>
-                                                    <span class="text-slate-400 font-mono text-[11px] shrink-0">{h.endDate || "Closed Cycle"}</span>
+                                                    <span class="text-slate-400 font-mono text-[11px] shrink-0">
+                                                        {h.endDate ? h.endDate.split(',')[0] : "Closed Cycle"}
+                                                    </span>
                                                 </div>
                                             ))}
                                         </div>
@@ -964,7 +966,7 @@
                                 <form onSubmit={executeParallelBranch} class="space-y-4">
                                     <div class="space-y-1.5">
                                         <label class="block text-[10px] font-black uppercase text-slate-400">Parallel Executor Agent</label>
-                                        <select value={parallel_assignee} onChange={(e) => setParallelAssignee(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-indigo-500 cursor-pointer">
+                                        <select value={parallelAssignee} onChange={(e) => setParallelAssignee(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-indigo-500 cursor-pointer">
                                             {users.map(u => <option key={u} value={u}>{u}</option>)}
                                         </select>
                                     </div>

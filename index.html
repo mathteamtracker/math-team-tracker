@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Team Tracker (Ver 9 - Cloud Sync)</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <title>Math Team Tracker (Ver 9.1 - Mobile Optimized)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,11 +20,11 @@
 
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script>
         const { useState, useEffect, useCallback } = React;
+        const e = React.createElement;
 
         // --- IMPORTANT CONFIGURATION ---
-        // I-paste dito ang nakuha mong Web App URL mula sa Google Apps Script Deployment
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw1-nYWa-rrdwDywuOwUERSk5_c8Epgp2M5LKp96oM1Rbvpz6q_tEqCMRnz02gvnq2YlQ/exec"; 
 
         const COMPONENTS = ["TB", "TWE", "Others"];
@@ -46,11 +45,9 @@
             const [activeTab, setActiveTab] = useState("user-view");
             const [isLoading, setIsLoading] = useState(true);
 
-            // Report Tree expansion states
             const [expandedSeries, setExpandedSeries] = useState({});
             const [expandedComponents, setExpandedComponents] = useState({});
             const [expandedStages, setExpandedStages] = useState({});
-
             const [lastHandOffAction, setLastHandOffAction] = useState(null);
 
             // Modals
@@ -87,7 +84,6 @@
                 setTimeout(() => setToast(null), 4000);
             };
 
-            // FETCH DATA FROM GOOGLE SHEETS
             const loadCloudData = useCallback(async (showToast = false) => {
                 if (SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE") {
                     setIsLoading(false);
@@ -101,9 +97,7 @@
                         setUsers(data.users);
                         if (!currentUser) setCurrentUser(data.users[0]);
                     }
-                    if (data.projects) {
-                        setProjects(data.projects);
-                    }
+                    if (data.projects) setProjects(data.projects);
                     if (showToast) triggerToast("🔄 Data refreshed from Cloud Database.");
                 } catch (error) {
                     console.error("Error reading cloud data:", error);
@@ -113,21 +107,15 @@
                 }
             }, [currentUser]);
 
-            // PUSH DATA TO GOOGLE SHEETS
             const syncToCloud = async (updatedProjects, updatedUsers) => {
                 if (SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE") return;
                 try {
                     await fetch(SCRIPT_URL, {
                         method: "POST",
-                        mode: "no-cors", // Crucial for cross-origin Apps Script posting
+                        mode: "no-cors",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            action: "syncAll",
-                            projects: updatedProjects,
-                            users: updatedUsers
-                        })
+                        body: JSON.stringify({ action: "syncAll", projects: updatedProjects, users: updatedUsers })
                     });
-                    // Since no-cors doesn't allow reading response, we update state locally and assume success
                     triggerToast("☁️ Saved & Synced successfully for all users!");
                 } catch (error) {
                     console.error("Cloud push failed:", error);
@@ -135,10 +123,8 @@
                 }
             };
 
-            // Initialize App
             useEffect(() => {
                 loadCloudData();
-                // Auto background check for updates every 30 seconds
                 const interval = setInterval(() => loadCloudData(false), 30000);
                 return () => clearInterval(interval);
             }, [loadCloudData]);
@@ -156,35 +142,25 @@
             }, [existingSeriesList, selectedExistingSeries]);
 
             const getFormattedDateTime = () => {
-                const options = { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
-                return new Date().toLocaleDateString('en-US', options);
+                return new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true });
             };
 
             const getFormattedDateOnly = () => {
-                const options = { year: 'numeric', month: 'short', day: '2-digit' };
-                return new Date().toLocaleDateString('en-US', options);
+                return new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
             };
 
             const handleAddMember = async (e) => {
                 e.preventDefault();
                 if (!newMemberName.trim() || !newMemberRole.trim()) return;
                 const formattedUserString = `${newMemberName.trim()} (${newMemberRole.trim()})`;
-                if (users.includes(formattedUserString)) {
-                    triggerToast("Member already exists!");
-                    return;
-                }
+                if (users.includes(formattedUserString)) { triggerToast("Member already exists!"); return; }
                 const newUsers = [...users, formattedUserString];
-                setUsers(newUsers);
-                setNewMemberName("");
-                setNewMemberRole("");
+                setUsers(newUsers); setNewMemberName(""); setNewMemberRole("");
                 await syncToCloud(projects, newUsers);
             };
 
             const handleRemoveMember = async (userToRemove) => {
-                if (users.length <= 1) {
-                    triggerToast("Cannot empty the roster!");
-                    return;
-                }
+                if (users.length <= 1) { triggerToast("Cannot empty the roster!"); return; }
                 const newUsers = users.filter(u => u !== userToRemove);
                 setUsers(newUsers);
                 await syncToCloud(projects, newUsers);
@@ -192,26 +168,18 @@
 
             const handleReceiveAndStart = async (projectId, taskId) => {
                 const taskName = definedTaskNames[`${projectId}-${taskId}`];
-                if (!taskName || !taskName.trim()) {
-                    triggerToast("Please define the task description context first!");
-                    return;
-                }
+                if (!taskName || !taskName.trim()) { triggerToast("Please define the task description!"); return; }
                 const now = getFormattedDateTime();
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
-                    return {
-                        ...p,
-                        tasks: p.tasks.map(t => t.id === taskId ? { ...t, name: taskName.trim(), status: "In Progress", startDate: now } : t)
-                    };
+                    return { ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, name: taskName.trim(), status: "In Progress", startDate: now } : t) };
                 });
                 setProjects(updated);
                 await syncToCloud(updated, users);
             };
 
             const openEditTaskModal = (projectId, taskId, currentName) => {
-                setEditTarget({ projectId, taskId });
-                setEditTaskNameInput(currentName);
-                setIsEditModalOpen(true);
+                setEditTarget({ projectId, taskId }); setEditTaskNameInput(currentName); setIsEditModalOpen(true);
             };
 
             const saveEditedTaskName = async (e) => {
@@ -219,14 +187,9 @@
                 if (!editTaskNameInput.trim() || !editTarget) return;
                 const updated = projects.map(p => {
                     if (p.id !== editTarget.projectId) return p;
-                    return {
-                        ...p,
-                        tasks: p.tasks.map(t => t.id === editTarget.taskId ? { ...t, name: editTaskNameInput.trim() } : t)
-                    };
+                    return { ...p, tasks: p.tasks.map(t => t.id === editTarget.taskId ? { ...t, name: editTaskNameInput.trim() } : t) };
                 });
-                setProjects(updated);
-                setIsEditModalOpen(false);
-                setEditTarget(null);
+                setProjects(updated); setIsEditModalOpen(false); setEditTarget(null);
                 await syncToCloud(updated, users);
             };
 
@@ -235,8 +198,7 @@
                     if (p.id !== projectId) return p;
                     return { ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, status: "Paused" } : t) };
                 });
-                setProjects(updated);
-                await syncToCloud(updated, users);
+                setProjects(updated); await syncToCloud(updated, users);
             };
 
             const handleResumeTask = async (projectId, taskId) => {
@@ -244,20 +206,15 @@
                     if (p.id !== projectId) return p;
                     return { ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, status: "In Progress" } : t) };
                 });
-                setProjects(updated);
-                await syncToCloud(updated, users);
+                setProjects(updated); await syncToCloud(updated, users);
             };
 
             const handleDoneClick = (projectId, taskId) => {
-                setHandOffTarget({ projectId, taskId });
-                setNextAssignee(users.find(u => u !== currentUser) || users[0]);
-                setIsHandOffModalOpen(true);
+                setHandOffTarget({ projectId, taskId }); setNextAssignee(users.find(u => u !== currentUser) || users[0]); setIsHandOffModalOpen(true);
             };
 
             const executeHandOff = async (e) => {
-                e.preventDefault();
-                if (!handOffTarget) return;
-
+                e.preventDefault(); if (!handOffTarget) return;
                 const { projectId, taskId } = handOffTarget;
                 const historyDate = getFormattedDateOnly();
                 const timestamp = Date.now();
@@ -265,7 +222,6 @@
 
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
-
                     const targetTask = p.tasks.find(t => t.id === taskId);
                     const completedTask = { ...targetTask, status: "Done", endDate: historyDate, completedAtTimestamp: timestamp };
                     const remainingTasks = p.tasks.filter(t => t.id !== taskId);
@@ -274,105 +230,66 @@
                     let updatedTasks = remainingTasks;
                     if (shouldSpawnNextPlaceholder) {
                         spawnedTaskId = `task-${Date.now()}`;
-                        updatedTasks = [...remainingTasks, {
-                            id: spawnedTaskId, name: "Awaiting task description from the recipient...", status: "Pending Transfer", assignee: nextAssignee, startDate: null, endDate: null, isParallel: false
-                        }];
+                        updatedTasks = [...remainingTasks, { id: spawnedTaskId, name: "Awaiting task description from the recipient...", status: "Pending Transfer", assignee: nextAssignee, startDate: null, endDate: null, isParallel: false }];
                     }
-
                     setLastHandOffAction({ projectId: p.id, originalTaskId: targetTask.id, spawnedTaskId: spawnedTaskId, sender: currentUser, recipient: nextAssignee });
                     return { ...p, tasks: updatedTasks, history: [completedTask, ...p.history] };
                 });
 
-                setProjects(updated);
-                setIsHandOffModalOpen(false);
-                setHandOffTarget(null);
+                setProjects(updated); setIsHandOffModalOpen(false); setHandOffTarget(null);
                 await syncToCloud(updated, users);
             };
 
             const handleUndoHandOff = async () => {
                 if (!lastHandOffAction) return;
                 const { projectId, originalTaskId, spawnedTaskId } = lastHandOffAction;
-
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
                     const mistakenHistoryTask = p.history.find(h => h.id === originalTaskId);
                     if (!mistakenHistoryTask) return p;
-
                     return {
                         ...p,
                         tasks: [...p.tasks.filter(t => t.id !== spawnedTaskId), { ...mistakenHistoryTask, status: "In Progress", endDate: null, completedAtTimestamp: null }],
                         history: p.history.filter(h => h.id !== originalTaskId)
                     };
                 });
-
-                setProjects(updated);
-                setLastHandOffAction(null);
-                await syncToCloud(updated, users);
+                setProjects(updated); setLastHandOffAction(null); await syncToCloud(updated, users);
             };
 
             const handleAbsoluteFinishProject = async (projectId, taskId) => {
                 if (!window.confirm("Is this book module fully complete for archival closeout?")) return;
-                const historyDate = getFormattedDateOnly();
-                const timestamp = Date.now();
-
+                const historyDate = getFormattedDateOnly(); const timestamp = Date.now();
                 const updated = projects.map(p => {
                     if (p.id !== projectId) return p;
                     const targetTask = p.tasks.find(t => t.id === taskId);
-                    return {
-                        ...p,
-                        isArchived: p.tasks.length === 1,
-                        tasks: p.tasks.filter(t => t.id !== taskId),
-                        history: [{ ...targetTask, status: "Done", endDate: historyDate, completedAtTimestamp: timestamp }, ...p.history]
-                    };
+                    return { ...p, isArchived: p.tasks.length === 1, tasks: p.tasks.filter(t => t.id !== taskId), history: [{ ...targetTask, status: "Done", endDate: historyDate, completedAtTimestamp: timestamp }, ...p.history] };
                 });
-                setProjects(updated);
-                await syncToCloud(updated, users);
+                setProjects(updated); await syncToCloud(updated, users);
             };
 
             const openParallelModal = (projectId) => {
-                setParallelTargetProjectId(projectId);
-                setParallelAssignee(users.find(u => u !== currentUser) || users[0]);
-                setIsParallelModalOpen(true);
+                setParallelTargetProjectId(projectId); setParallelAssignee(users.find(u => u !== currentUser) || users[0]); setIsParallelModalOpen(true);
             };
 
             const executeParallelBranch = async (e) => {
-                e.preventDefault();
-                if (!parallelTargetProjectId) return;
-
+                e.preventDefault(); if (!parallelTargetProjectId) return;
                 const updated = projects.map(p => {
                     if (p.id !== parallelTargetProjectId) return p;
-                    return {
-                        ...p,
-                        tasks: [...p.tasks, { id: `task-${Date.now()}`, name: "Awaiting parallel task details from recipient...", status: "Pending Transfer", assignee: parallelAssignee, startDate: null, endDate: null, isParallel: true }]
-                    };
+                    return { ...p, tasks: [...p.tasks, { id: `task-${Date.now()}`, name: "Awaiting parallel task details from recipient...", status: "Pending Transfer", assignee: parallelAssignee, startDate: null, endDate: null, isParallel: true }] };
                 });
-                setProjects(updated);
-                setIsParallelModalOpen(false);
-                await syncToCloud(updated, users);
+                setProjects(updated); setIsParallelModalOpen(false); await syncToCloud(updated, users);
             };
 
             const handleCreateProject = async (e) => {
-                e.preventDefault();
-                let seriesName = "";
-                if (seriesCreationMode === "new") {
-                    if (!newSeriesInput.trim()) return;
-                    seriesName = newSeriesInput.trim().toUpperCase();
-                } else {
-                    if (!selectedExistingSeries) return;
-                    seriesName = selectedExistingSeries;
-                }
-
+                e.preventDefault(); let seriesName = seriesCreationMode === "new" ? newSeriesInput.trim().toUpperCase() : selectedExistingSeries;
+                if (!seriesName) return;
                 const computedTitle = `${seriesName} - ${selectedComponent} - ${selectedStage} - ${selectedLevel}`;
                 const newProj = {
                     id: `proj-${Date.now()}`, series: seriesName, component: selectedComponent, stage: selectedStage, level: selectedLevel, title: computedTitle, stageColor: newProjectStageColor, isArchived: false,
                     tasks: [{ id: `task-${Date.now()}`, name: "Awaiting task description from the recipient...", status: "Pending Transfer", assignee: firstAssignee || users[0], startDate: null, endDate: null, isParallel: false }],
                     history: []
                 };
-
-                const updated = [newProj, ...projects];
-                setProjects(updated);
-                setNewSeriesInput("");
-                setIsProjectModalOpen(false);
+                const updated = [newProj, ...projects]; setProjects(updated); setNewSeriesInput(""); setIsProjectModalOpen(false);
                 await syncToCloud(updated, users);
             };
 
@@ -385,11 +302,7 @@
             const myPlateTasks = [];
             projects.forEach(p => {
                 if (!p.isArchived) {
-                    p.tasks.forEach(t => {
-                        if (t.assignee === currentUser) {
-                            myPlateTasks.push({ projectId: p.id, projectTitle: p.title, projectStageColor: p.stageColor || "Red", ...t });
-                        }
-                    });
+                    p.tasks.forEach(t => { if (t.assignee === currentUser) myPlateTasks.push({ projectId: p.id, projectTitle: p.title, projectStageColor: p.stageColor || "Red", ...t }); });
                 }
             });
 
@@ -403,499 +316,238 @@
             };
 
             if (isLoading) {
-                return (
-                    <div class="flex flex-col items-center justify-center min-h-screen bg-[#080B10]">
-                        <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p class="text-sm font-bold tracking-wide text-slate-400">Connecting to Google Sheets Cloud Database...</p>
-                    </div>
+                return e("div", { class: "flex flex-col items-center justify-center min-h-screen bg-[#080B10]" },
+                    e("div", { class: "w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" }),
+                    e("p", { class: "text-sm font-bold tracking-wide text-slate-400" }, "Connecting to Cloud Database...")
                 );
             }
 
-            return (
-                <div class="max-w-5xl mx-auto px-4 py-6 md:py-10">
-                    
-                    {toast && (
-                        <div class="fixed top-6 right-6 z-50 bg-slate-900 border border-indigo-500/40 shadow-2xl p-4 rounded-xl flex items-center gap-3">
-                            <div class="w-2 h-2 rounded-full bg-lime-400 animate-ping"></div>
-                            <p class="text-sm font-semibold text-slate-100">{toast}</p>
-                        </div>
-                    )}
-
-                    {SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE" && (
-                        <div class="bg-amber-950/40 border border-amber-500/30 p-4 rounded-xl text-xs text-amber-300 mb-6 flex items-center gap-2">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                            <span><strong>Setup Required:</strong> Please configure your Google Sheets Apps Script Web App URL in line 40 of this file to activate multi-user live synchronization.</span>
-                        </div>
-                    )}
-
-                    {/* App Branding Top Bar */}
-                    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-6 mb-8 gap-4">
-                        <div>
-                            <h1 class="text-3xl font-extrabold heading-font text-white tracking-tight flex items-center gap-2">
-                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 9</span>
-                            </h1>
-                            <p class="text-slate-400 text-xs mt-0.5">Cloud-Synced Workflow Matrix</p>
-                        </div>
-
-                        <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                            <button onClick={() => loadCloudData(true)} class="bg-slate-900 border border-slate-800 text-slate-400 px-3 py-2 rounded-xl text-xs font-bold hover:text-white transition">
-                                <i class="fa-solid fa-arrows-rotate mr-1"></i> Refresh
-                            </button>
-                            <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-2.5">
-                                <div>
-                                    <span class="block text-[9px] uppercase tracking-wider text-slate-500 font-bold">User Context:</span>
-                                    <select value={currentUser} onChange={(e) => setCurrentUser(e.target.value)} class="bg-transparent font-bold text-slate-100 text-sm focus:outline-none cursor-pointer pr-2">
-                                        {users.map(u => <option class="bg-slate-950 text-slate-200" key={u} value={u}>{u}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                            <button onClick={() => setIsTeamModalOpen(true)} class="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 transition">
-                                <i class="fa-solid fa-users text-xs text-indigo-400"></i> Manage Team
-                            </button>
-                            <button onClick={() => { setFirstAssignee(currentUser || users[0]); setIsProjectModalOpen(true); }} class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-lg transition">
-                                <i class="fa-solid fa-plus text-xs"></i> New Project
-                            </button>
-                        </div>
-                    </header>
-
-                    {/* Navigation Dashboard System */}
-                    <div class="flex flex-wrap gap-2 border-b border-slate-800 mb-8 bg-slate-900 p-1 rounded-xl w-full">
-                        <button onClick={() => setActiveTab("user-view")} class={`px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'user-view' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-                            <i class="fa-solid fa-tray text-indigo-400"></i> My Plate ({currentUser ? currentUser.split(" ")[0] : ""})
-                            {myPlateTasks.length > 0 && <span class="bg-indigo-500 text-white rounded-full px-1.5 py-0.5 text-[10px] font-black">{myPlateTasks.length}</span>}
-                        </button>
-                        <button onClick={() => setActiveTab("series-view")} class={`px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'series-view' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-                            <i class="fa-solid fa-folder-tree text-indigo-400"></i> View Per Series
-                        </button>
-                        <button onClick={() => setActiveTab("level-view")} class={`px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'level-view' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-                            <i class="fa-solid fa-layer-group text-indigo-400"></i> View Per Level
-                        </button>
-                        <button onClick={() => setActiveTab("workload-view")} class={`px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'workload-view' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-                            <i class="fa-solid fa-chart-pie text-indigo-400"></i> Users Workload ({users.length})
-                        </button>
-                    </div>
-
-                    {/* TAB 1: USER CONTEXT PLATE */}
-                    {activeTab === "user-view" && (
-                        <div class="space-y-6">
-                            {lastHandOffAction && lastHandOffAction.sender === currentUser && (
-                                <div class="bg-indigo-950/40 border border-indigo-500/30 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                    <div class="flex items-center gap-3">
-                                        <i class="fa-solid fa-rotate-left text-indigo-400 text-sm"></i>
-                                        <div>
-                                            <h4 class="text-xs font-bold text-slate-200">Mistakenly passed a task?</h4>
-                                            <p class="text-[10px] text-slate-400">Revert changes and recover your task from {lastHandOffAction.recipient.split(" ")[0]} instantly.</p>
-                                        </div>
-                                    </div>
-                                    <button onClick={handleUndoHandOff} class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs px-4 py-2 rounded-xl transition shadow flex items-center gap-1.5 w-full sm:w-auto justify-center">
-                                        Undo Last Hand-off
-                                    </button>
-                                </div>
-                            )}
-
-                            <div>
-                                <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <span class="w-1 h-3 bg-indigo-500 rounded-xs"></span> Tasks Pending Your Action
-                                </h2>
-
-                                {myPlateTasks.length === 0 ? (
-                                    <div class="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-12 text-center">
-                                        <i class="fa-solid fa-folder-open text-slate-700 text-2xl mb-2"></i>
-                                        <h3 class="text-xs font-bold text-slate-400">No workload allocated here.</h3>
-                                    </div>
-                                ) : (
-                                    <div class="grid gap-4 sm:grid-cols-2">
-                                        {myPlateTasks.map(task => (
-                                            <div key={task.id} class="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
-                                                <div>
-                                                    <div class="flex justify-between items-start gap-2 mb-3">
-                                                        <div class="flex flex-wrap items-center gap-1 max-w-[70%]">
-                                                            <span class="text-[10px] font-bold uppercase bg-slate-950 text-slate-300 px-2 py-0.5 rounded border border-slate-800 truncate">
-                                                                📚 {task.projectTitle}
-                                                            </span>
-                                                            <span class={`text-[8px] font-black px-1.5 py-0.5 rounded border ${getStageBadgeStyle(task.projectStageColor)}`}>
-                                                                {task.projectStageColor}
-                                                            </span>
-                                                        </div>
-                                                        <span class={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${task.status === "In Progress" ? "bg-emerald-950 text-emerald-400 border border-emerald-900/40" : task.status === "Paused" ? "bg-rose-950 text-rose-400 border border-rose-900/40" : "bg-amber-950 text-amber-400 border border-amber-900/40"}`}>
-                                                            {task.status === "Pending Transfer" ? "📥 Incoming" : task.status}
-                                                        </span>
-                                                    </div>
-
-                                                    {task.status === "Pending Transfer" ? (
-                                                        <div class="mb-4 bg-slate-950 p-3.5 rounded-xl border border-dashed border-slate-800">
-                                                            <label class="block text-[9px] font-black text-amber-400 uppercase mb-1.5">📥 Define Task Mission Description</label>
-                                                            <input type="text" placeholder="e.g. Editing Module 1 Chapters 1-3" value={definedTaskNames[`${task.projectId}-${task.id}`] || ""} onChange={(e) => setDefinedTaskNames({ ...definedTaskNames, [`${task.projectId}-${task.id}`]: e.target.value })} class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500" />
-                                                        </div>
-                                                    ) : (
-                                                        <div class="mb-4 bg-slate-950/30 border border-slate-800/40 p-3 rounded-xl relative">
-                                                            <h3 class="text-xs font-bold text-slate-200 mb-1 pr-14">{task.name}</h3>
-                                                            <p class="text-[9px] text-slate-500"><i class="fa-solid fa-clock mr-1"></i> Triggered: {task.startDate}</p>
-                                                            <button onClick={() => openEditTaskModal(task.projectId, task.id, task.name)} class="absolute right-2 top-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[9px] px-1.5 py-0.5 rounded">Edit</button>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div class="flex flex-col gap-2 pt-3 border-t border-slate-800/60">
-                                                    {task.status === "Pending Transfer" ? (
-                                                        <button onClick={() => handleReceiveAndStart(task.projectId, task.id)} class="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-black py-2 rounded-xl transition">
-                                                            Receive & Initialize Track
-                                                        </button>
-                                                    ) : (
-                                                        <div class="space-y-2">
-                                                            <div class="flex gap-2">
-                                                                {task.status === "In Progress" ? (
-                                                                    <button onClick={() => handlePauseTask(task.projectId, task.id)} class="bg-slate-800 text-amber-400 text-xs font-bold px-2.5 py-1.5 rounded-xl">Pause</button>
-                                                                ) : (
-                                                                    <button onClick={() => handleResumeTask(task.projectId, task.id)} class="bg-emerald-950 text-emerald-400 text-xs font-bold px-2.5 py-1.5 rounded-xl">Resume</button>
-                                                                )}
-                                                                <button onClick={() => openParallelModal(task.projectId)} class="bg-slate-800 text-slate-300 text-xs font-bold px-2.5 py-1.5 rounded-xl">+ Parallel</button>
-                                                                <button onClick={() => handleDoneClick(task.projectId, task.id)} class="flex-1 bg-indigo-600 text-white text-xs font-black py-1.5 rounded-xl">Done & Pass ➡️</button>
-                                                            </div>
-                                                            <button onClick={() => handleAbsoluteFinishProject(task.projectId, task.id)} class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-slate-950 font-black text-xs py-1.5 rounded-xl flex items-center justify-center gap-1">
-                                                                <i class="fa-solid fa-circle-check text-[10px]"></i> Mark Book Complete (Archive)
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* TAB 2: VIEW PER SERIES REPORT TREE */}
-                    {activeTab === "series-view" && (
-                        <div class="space-y-4">
-                            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">📂 Comprehensive Hierarchical Report (By Series)</h2>
-                            {uniqueSeriesKeys.length === 0 ? (
-                                <p class="text-xs text-slate-600 italic">No tracked series segments inside memory data storage.</p>
-                            ) : (
-                                uniqueSeriesKeys.map(seriesKey => {
-                                    const isSeriesExpanded = !!expandedSeries[seriesKey];
-                                    const seriesProjects = projects.filter(p => !p.isArchived && p.series === seriesKey);
-                                    
-                                    return (
-                                        <div key={seriesKey} class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                                            <div onClick={() => toggleTree('series', seriesKey)} class="bg-slate-950/60 px-5 py-3.5 border-b border-slate-800/60 flex justify-between items-center cursor-pointer hover:bg-slate-900 transition">
-                                                <div class="flex items-center gap-2">
-                                                    <i class={`fa-solid ${isSeriesExpanded ? 'fa-folder-open text-amber-400' : 'fa-folder text-indigo-400'} text-xs`}></i>
-                                                    <span class="text-sm font-black heading-font text-slate-100 tracking-wider">Series ID: {seriesKey}</span>
-                                                    <span class="text-[10px] px-1.5 py-0.2 bg-slate-900 rounded border border-slate-800 text-slate-400">{seriesProjects.length} Modules</span>
-                                                </div>
-                                                <i class={`fa-solid ${isSeriesExpanded ? 'fa-angle-up text-amber-400' : 'fa-angle-down'} text-xs`}></i>
-                                            </div>
-
-                                            {isSeriesExpanded && (
-                                                <div class="p-4 bg-slate-900/30 space-y-3 pl-8">
-                                                    {COMPONENTS.map(comp => {
-                                                        const compKey = `${seriesKey}-${comp}`;
-                                                        const isCompExpanded = !!expandedComponents[compKey];
-                                                        const compProjects = seriesProjects.filter(p => p.component === comp);
-
-                                                        if (compProjects.length === 0) return null;
-
-                                                        return (
-                                                            <div key={comp} class="border border-slate-800/50 bg-slate-950/20 rounded-lg overflow-hidden">
-                                                                <div onClick={() => toggleTree('component', compKey)} class="bg-slate-950/30 px-4 py-2.5 flex justify-between items-center cursor-pointer hover:bg-slate-950/60 text-xs font-bold text-slate-300">
-                                                                    <span>Component Type: <strong class="text-indigo-400 font-mono">{comp}</strong></span>
-                                                                    <i class={`fa-solid ${isCompExpanded ? 'fa-minus text-[9px]' : 'fa-plus text-[9px]'} text-slate-500`}></i>
-                                                                </div>
-
-                                                                {isCompExpanded && (
-                                                                    <div class="p-3 bg-slate-950/10 space-y-2 pl-6 border-t border-slate-950/50">
-                                                                        {STAGES.map(stg => {
-                                                                            const stgKey = `${compKey}-${stg}`;
-                                                                            const isStgExpanded = !!expandedStages[stgKey];
-                                                                            const stageProjects = compProjects.filter(p => p.stage === stg);
-
-                                                                            if (stageProjects.length === 0) return null;
-
-                                                                            return (
-                                                                                <div key={stg} class="border border-slate-800/40 rounded-md bg-slate-950/40 overflow-hidden">
-                                                                                    <div onClick={() => toggleTree('stage', stgKey)} class="px-3 py-2 flex justify-between items-center text-[11px] font-semibold text-slate-400 cursor-pointer hover:bg-slate-950 transition">
-                                                                                        <span>Stage Structure: <strong class="text-amber-400">{stg}</strong></span>
-                                                                                        <span class="text-[9px] text-slate-600 font-mono">{stageProjects.length} rows</span>
-                                                                                    </div>
-
-                                                                                    {isStgExpanded && (
-                                                                                        <div class="p-2 bg-slate-950/60 border-t border-slate-900 space-y-1.5 text-xs">
-                                                                                            {stageProjects.map(proj => (
-                                                                                                <div key={proj.id} class="bg-slate-900/60 p-2.5 rounded border border-slate-800 flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                                                                                                    <div>
-                                                                                                        <div class="flex items-center gap-2">
-                                                                                                            <span class="font-bold font-mono text-slate-200">{proj.level}</span>
-                                                                                                            <span class={`text-[8px] px-1 font-black rounded uppercase border ${getStageBadgeStyle(proj.stageColor)}`}>{proj.stageColor}</span>
-                                                                                                        </div>
-                                                                                                        <div class="text-[10px] text-slate-500 mt-1">
-                                                                                                            {proj.tasks.map(t => `👤 assigned: ${t.assignee} [${t.status}]`).join(", ")}
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
+            return e("div", { class: "max-w-5xl mx-auto px-4 py-6 md:py-10" },
+                toast && e("div", { class: "fixed top-6 right-6 z-50 bg-slate-900 border border-indigo-500/40 shadow-2xl p-4 rounded-xl flex items-center gap-3" },
+                    e("div", { class: "w-2 h-2 rounded-full bg-lime-400 animate-ping" }),
+                    e("p", { class: "text-sm font-semibold text-slate-100" }, toast)
+                ),
+                SCRIPT_URL === "YOUR_GOOGLE_WEB_APP_URL_HERE" && e("div", { class: "bg-amber-950/40 border border-amber-500/30 p-4 rounded-xl text-xs text-amber-300 mb-6 flex items-center gap-2" },
+                    e("i", { class: "fa-solid fa-triangle-exclamation" }),
+                    e("span", null, e("strong", null, "Setup Required: "), "Please configure your Google App URL in line 26.")
+                ),
+                e("header", { class: "flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-6 mb-8 gap-4" },
+                    e("div", null,
+                        e("h1", { class: "text-3xl font-extrabold heading-font text-white tracking-tight flex items-center gap-2" },
+                            "Math Team Tracker", e("span", { class: "text-indigo-400" }, "."), e("span", { class: "text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded" }, "Ver 9.1")
+                        ),
+                        e("p", { class: "text-slate-400 text-xs mt-0.5" }, "Cloud-Synced Matrix")
+                    ),
+                    e("div", { class: "flex flex-wrap items-center gap-3 w-full sm:w-auto justify-between sm:justify-end" },
+                        e("button", { onClick: () => loadCloudData(true), class: "bg-slate-900 border border-slate-800 text-slate-400 px-3 py-2 rounded-xl text-xs font-bold hover:text-white" },
+                            e("i", { class: "fa-solid fa-arrows-rotate mr-1" }), " Refresh"
+                        ),
+                        e("div", { class: "bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-2.5" },
+                            e("div", null,
+                                e("span", { class: "block text-[9px] uppercase tracking-wider text-slate-500 font-bold" }, "User Context:"),
+                                e("select", { value: currentUser, onChange: (e) => setCurrentUser(e.target.value), class: "bg-transparent font-bold text-slate-100 text-sm focus:outline-none cursor-pointer pr-2" },
+                                    users.map(u => e("option", { class: "bg-slate-950 text-slate-200", key: u, value: u }, u))
+                                )
+                            )
+                        ),
+                        e("button", { onClick: () => setIsTeamModalOpen(true), class: "bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2" },
+                            e("i", { class: "fa-solid fa-users text-indigo-400 text-xs" }), " Manage Team"
+                        ),
+                        e("button", { onClick: () => { setFirstAssignee(currentUser || users[0]); setIsProjectModalOpen(true); }, class: "bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-lg" },
+                            e("i", { class: "fa-solid fa-plus text-xs" }), " New Project"
+                        )
+                    )
+                ),
+                e("div", { class: "flex flex-wrap gap-2 border-b border-slate-800 mb-8 bg-slate-900 p-1 rounded-xl w-full" },
+                    e("button", { onClick: () => setActiveTab("user-view"), class: `px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'user-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}` }, "My Plate"),
+                    e("button", { onClick: () => setActiveTab("series-view"), class: `px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'series-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}` }, "Per Series"),
+                    e("button", { onClick: () => setActiveTab("level-view"), class: `px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'level-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}` }, "Per Level"),
+                    e("button", { onClick: () => setActiveTab("workload-view"), class: `px-4 py-2 rounded-lg font-bold text-xs transition flex items-center gap-2 ${activeTab === 'workload-view' ? 'bg-slate-800 text-white' : 'text-slate-400'}` }, "Workload")
+                ),
+                activeTab === "user-view" && e("div", { class: "space-y-6" },
+                    lastHandOffAction && lastHandOffAction.sender === currentUser && e("div", { class: "bg-indigo-950/40 border border-indigo-500/30 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3" },
+                        e("div", null, e("h4", { class: "text-xs font-bold" }, "Mistakenly passed a task?"), e("p", { class: "text-[10px] text-slate-400" }, "Revert changes instantly.")),
+                        e("button", { onClick: handleUndoHandOff, class: "bg-indigo-600 text-white text-xs font-black px-4 py-2 rounded-xl" }, "Undo Hand-off")
+                    ),
+                    e("div", null,
+                        e("h2", { class: "text-xs font-black text-slate-400 uppercase tracking-widest mb-4" }, "Tasks Pending Your Action"),
+                        myPlateTasks.length === 0 ? e("div", { class: "bg-slate-900/40 border border-slate-800 p-12 text-center rounded-2xl" }, "No workload allocated here.") :
+                        e("div", { class: "grid gap-4 sm:grid-cols-2" },
+                            myPlateTasks.map(task => e("div", { key: task.id, class: "bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between" },
+                                e("div", null,
+                                    e("div", { class: "flex justify-between mb-3" },
+                                        e("span", { class: "text-[10px] font-bold bg-slate-950 px-2 py-0.5 rounded truncate max-w-[70%]" }, `📚 ${task.projectTitle}`),
+                                        e("span", { class: `text-[9px] font-black px-2 py-0.5 rounded uppercase ${task.status === "In Progress" ? "bg-emerald-950 text-emerald-400" : "bg-amber-950 text-amber-400"}` }, task.status === "Pending Transfer" ? "📥 Incoming" : task.status)
+                                    ),
+                                    task.status === "Pending Transfer" ? e("div", { class: "mb-4 bg-slate-950 p-3.5 rounded-xl border border-dashed border-slate-800" },
+                                        e("label", { class: "block text-[9px] font-black text-amber-400 uppercase mb-1" }, "Define Task Context Description"),
+                                        e("input", { type: "text", placeholder: "e.g. Editing Module 1 Chapters 1-3", value: definedTaskNames[`${task.projectId}-${task.id}`] || "", onChange: (e) => setDefinedTaskNames({ ...definedTaskNames, [`${task.projectId}-${task.id}`]: e.target.value }), class: "w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none" })
+                                    ) : e("div", { class: "mb-4 bg-slate-950/30 border border-slate-800/40 p-3 rounded-xl relative" },
+                                        e("h3", { class: "text-xs font-bold text-slate-200 mb-1" }, task.name),
+                                        e("p", { class: "text-[9px] text-slate-500" }, `Triggered: ${task.startDate}`),
+                                        e("button", { onClick: () => openEditTaskModal(task.projectId, task.id, task.name), class: "absolute right-2 top-2 bg-slate-800 text-[9px] px-1.5 py-0.5 rounded" }, "Edit")
+                                    )
+                                ),
+                                e("div", { class: "flex flex-col gap-2 pt-3 border-t border-slate-800/60" },
+                                    task.status === "Pending Transfer" ? e("button", { onClick: () => handleReceiveAndStart(task.projectId, task.id), class: "w-full bg-emerald-600 text-slate-950 text-xs font-black py-2 rounded-xl" }, "Receive & Start") :
+                                    e("div", { class: "space-y-2" },
+                                        e("div", { class: "flex gap-2" },
+                                            task.status === "In Progress" ? e("button", { onClick: () => handlePauseTask(task.projectId, task.id), class: "bg-slate-800 text-amber-400 text-xs font-bold px-2.5 py-1.5 rounded-xl" }, "Pause") : e("button", { onClick: () => handleResumeTask(task.projectId, task.id), class: "bg-emerald-950 text-emerald-400 text-xs font-bold px-2.5 py-1.5 rounded-xl" }, "Resume"),
+                                            e("button", { onClick: () => openParallelModal(task.projectId), class: "bg-slate-800 text-slate-300 text-xs font-bold px-2.5 py-1.5 rounded-xl" }, "+ Parallel"),
+                                            e("button", { onClick: () => handleDoneClick(task.projectId, task.id), class: "flex-1 bg-indigo-600 text-white text-xs font-black py-1.5 rounded-xl" }, "Done & Pass ➡️")
+                                        ),
+                                        e("button", { onClick: () => handleAbsoluteFinishProject(task.projectId, task.id), class: "w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-slate-950 font-black text-xs py-1.5 rounded-xl" }, "Mark Book Complete (Archive)")
+                                    )
+                                )
+                            ))
+                        )
+                    )
+                ),
+                activeTab === "series-view" && e("div", { class: "space-y-4" },
+                    uniqueSeriesKeys.map(seriesKey => {
+                        const isSeriesExpanded = !!expandedSeries[seriesKey];
+                        const seriesProjects = projects.filter(p => !p.isArchived && p.series === seriesKey);
+                        return e("div", { key: seriesKey, class: "bg-slate-900 border border-slate-800 rounded-xl overflow-hidden" },
+                            e("div", { onClick: () => toggleTree('series', seriesKey), class: "bg-slate-950/60 px-5 py-3.5 border-b border-slate-800 flex justify-between items-center cursor-pointer" },
+                                e("span", { class: "text-sm font-black" }, `Series: ${seriesKey}`),
+                                e("i", { class: `fa-solid ${isSeriesExpanded ? 'fa-angle-up' : 'fa-angle-down'}` })
+                            ),
+                            isSeriesExpanded && e("div", { class: "p-4 space-y-3 pl-8 bg-slate-900/30" },
+                                COMPONENTS.map(comp => {
+                                    const compKey = `${seriesKey}-${comp}`;
+                                    const isCompExpanded = !!expandedComponents[compKey];
+                                    const compProjects = seriesProjects.filter(p => p.component === comp);
+                                    if (compProjects.length === 0) return null;
+                                    return e("div", { key: comp, class: "border border-slate-800 rounded-lg overflow-hidden" },
+                                        e("div", { onClick: () => toggleTree('component', compKey), class: "bg-slate-950/30 px-4 py-2.5 flex justify-between items-center cursor-pointer text-xs font-bold" },
+                                            e("span", null, "Component: ", e("strong", { class: "text-indigo-400" }, comp)),
+                                            e("i", { class: `fa-solid ${isCompExpanded ? 'fa-minus' : 'fa-plus'}` })
+                                        ),
+                                        isCompExpanded && e("div", { class: "p-3 space-y-2 pl-6" },
+                                            STAGES.map(stg => {
+                                                const stgKey = `${compKey}-${stg}`;
+                                                const isStgExpanded = !!expandedStages[stgKey];
+                                                const stageProjects = compProjects.filter(p => p.stage === stg);
+                                                if (stageProjects.length === 0) return null;
+                                                return e("div", { key: stg, class: "border border-slate-800 rounded bg-slate-950/40 overflow-hidden" },
+                                                    e("div", { onClick: () => toggleTree('stage', stgKey), class: "px-3 py-2 flex justify-between items-center text-[11px] font-semibold text-slate-400 cursor-pointer" },
+                                                        e("span", null, "Stage: ", e("strong", { class: "text-amber-400" }, stg)),
+                                                        e("span", null, `${stageProjects.length} modules`)
+                                                    ),
+                                                    isStgExpanded && e("div", { class: "p-2 bg-slate-950/60 space-y-1 text-xs" },
+                                                        stageProjects.map(proj => e("div", { key: proj.id, class: "bg-slate-900/60 p-2 rounded border border-slate-800" },
+                                                            e("span", { class: "font-bold text-slate-200" }, proj.level),
+                                                            e("div", { class: "text-[10px] text-slate-500" }, proj.tasks.map(t => `${t.assignee.split(" ")[0]} [${t.status}]`).join(", "))
+                                                        ))
+                                                    )
+                                                );
+                                            })
+                                        );
                                 })
-                            )}
-                        </div>
-                    )}
-
-                    {/* TAB 3: VIEW PER LEVEL MATRIX */}
-                    {activeTab === "level-view" && (
-                        <div class="space-y-4">
-                            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest">📋 Level-oriented Development Grid Allocation</h2>
-                            <div class="space-y-3">
-                                {allAvailableLevelsGlobal.map(lvl => {
-                                    const projectsInLvl = projects.filter(p => !p.isArchived && p.level === lvl);
-                                    if (projectsInLvl.length === 0) return null;
-
-                                    return (
-                                        <div key={lvl} class="bg-slate-900 border border-slate-800/80 rounded-xl p-4">
-                                            <div class="border-b border-slate-800 pb-2 mb-3 flex justify-between items-center">
-                                                <h3 class="text-sm font-black text-indigo-400 heading-font uppercase tracking-wide">🏫 Academic Level Cluster: {lvl}</h3>
-                                                <span class="text-[10px] bg-slate-950 px-2 py-0.5 rounded text-slate-500 font-mono">{projectsInLvl.length} active streams</span>
-                                            </div>
-                                            <div class="grid gap-2 sm:grid-cols-2">
-                                                {projectsInLvl.map(p => (
-                                                    <div key={p.id} class="bg-slate-950/40 p-3 rounded-lg border border-slate-800/40 flex justify-between items-center text-xs">
-                                                        <div>
-                                                            <div class="flex items-center gap-2">
-                                                                <span class="font-bold text-slate-100">{p.series} • {p.component}</span>
-                                                                <span class={`text-[8px] font-black px-1 rounded uppercase ${getStageBadgeStyle(p.stageColor)}`}>{p.stageColor}</span>
-                                                            </div>
-                                                            <div class="text-[10px] text-slate-500 mt-1">
-                                                                {p.tasks.map(t => `${t.name.substring(0,25)}... (${t.assignee.split(" ")[0]})`)}
-                                                            </div>
-                                                        </div>
-                                                        <span class="text-[9px] uppercase tracking-wider font-extrabold bg-slate-900 border border-slate-800 text-slate-400 px-1.5 py-0.5 rounded">{p.stage}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* TAB 4: COMPREHENSIVE USERS WORKLOAD VIEWER */}
-                    {activeTab === "workload-view" && (
-                        <div class="space-y-4">
-                            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest">👥 Individual Resource Loading & Production Assignment Matrix</h2>
-                            <div class="grid gap-4 md:grid-cols-2">
-                                {users.map(usr => {
-                                    const userAllocatedTasks = [];
-                                    projects.forEach(p => {
-                                        if (!p.isArchived) {
-                                            p.tasks.forEach(t => { if (t.assignee === usr) userAllocatedTasks.push({ projectTitle: p.title, stageColor: p.stageColor, ...t }); });
-                                        }
-                                    });
-
-                                    return (
-                                        <div key={usr} class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
-                                            <div>
-                                                <div class="flex justify-between items-center border-b border-slate-800/60 pb-2.5 mb-3">
-                                                    <h3 class="text-sm font-black text-slate-200 tracking-wide"><i class="fa-solid fa-user-tie text-indigo-400 mr-1.5"></i>{usr}</h3>
-                                                    <span class={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${userAllocatedTasks.length > 2 ? 'bg-amber-950 text-amber-400 border border-amber-900/30' : 'bg-slate-950 text-slate-400 border border-slate-800'}`}>{userAllocatedTasks.length} Assigned Tracks</span>
-                                                </div>
-                                                {userAllocatedTasks.length === 0 ? (
-                                                    <p class="text-[11px] text-slate-600 italic py-2">No active tasks operational on this desk context.</p>
-                                                ) : (
-                                                    <div class="space-y-2">
-                                                        {userAllocatedTasks.map(tk => (
-                                                            <div key={tk.id} class="bg-slate-950/60 p-2.5 border border-slate-800/60 rounded-lg text-xs flex flex-col gap-1">
-                                                                <div class="flex justify-between items-center">
-                                                                    <span class="font-bold font-mono text-slate-300 truncate max-w-[70%]">📖 {tk.projectTitle}</span>
-                                                                    <span class={`text-[8px] font-black uppercase px-1 rounded ${tk.status === "In Progress" ? "bg-emerald-950 text-emerald-400" : "bg-amber-950 text-amber-400"}`}>{tk.status}</span>
-                                                                </div>
-                                                                <p class="text-[11px] text-slate-400 font-medium truncate">{tk.name}</p>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL: NEW PROJECT */}
-                    {isProjectModalOpen && (
-                        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
-                                <h3 class="text-lg font-bold text-slate-100 heading-font mb-1">Architect New Math Track Module</h3>
-                                <form onSubmit={handleCreateProject} class="space-y-3.5 text-xs">
-                                    <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex gap-4">
-                                        <label class="flex items-center gap-1.5 cursor-pointer font-bold text-slate-300">
-                                            <input type="radio" name="seriesMode" checked={seriesCreationMode === "new"} onChange={() => setSeriesCreationMode("new")} /> Create New Series
-                                        </label>
-                                        <label class="flex items-center gap-1.5 cursor-pointer font-bold text-slate-300">
-                                            <input type="radio" name="seriesMode" checked={seriesCreationMode === "existing"} onChange={() => setSeriesCreationMode("existing")} disabled={existingSeriesList.length === 0} /> From Existing Series
-                                        </label>
-                                    </div>
-
-                                    {seriesCreationMode === "new" ? (
-                                        <div>
-                                            <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">New Series Abbreviation</label>
-                                            <input type="text" required placeholder="e.g. NCM" value={newSeriesInput} onChange={(e) => setNewSeriesInput(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 outline-none focus:border-indigo-500" />
-                                            <span class="text-[10px] text-amber-500 mt-1 block font-medium"><i class="fa-solid fa-circle-info mr-1"></i>Note: Use abbreviation only, example NCM</span>
-                                        </div>
-                                    ) : (
-                                        <div>
-                                            <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Select Existing Active Series</label>
-                                            <select value={selectedExistingSeries} onChange={(e) => setSelectedExistingSeries(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 font-bold outline-none">
-                                                {existingSeriesList.map(exs => <option key={exs} value={exs}>{exs}</option>)}
-                                            </select>
-                                        </div>
-                                    )}
-
-                                    <div>
-                                        <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Component Selection</label>
-                                        <select value={selectedComponent} onChange={(e) => setSelectedComponent(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 outline-none">
-                                            {COMPONENTS.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Development Stage Category</label>
-                                        <select value={selectedStage} onChange={(e) => setSelectedStage(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 outline-none">
-                                            {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Target Academic Sub-Level ({selectedStage})</label>
-                                        <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 outline-none font-bold text-indigo-400">
-                                            {STAGE_LEVELS[selectedStage].map(l => <option key={l} value={l}>{l}</option>)}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Development Checkpoint Milestone Color</label>
-                                        <select value={newProjectStageColor} onChange={(e) => setNewProjectStageColor(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 font-bold outline-none text-slate-200">
-                                            <option class="text-rose-400 bg-slate-950" value="Red">🔴 Red Stage</option>
-                                            <option class="text-blue-400 bg-slate-950" value="Blue">🔵 Blue Stage</option>
-                                            <option class="text-emerald-400 bg-slate-950" value="Green">🟢 Green Stage</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Initial Track Assigned Roster Owner</label>
-                                        <select value={firstAssignee} onChange={(e) => setFirstAssignee(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 outline-none">
-                                            {users.map(u => <option key={u} value={u}>{u}</option>)}
-                                        </select>
-                                    </div>
-
-                                    <div class="flex gap-2 justify-end pt-3">
-                                        <button type="button" onClick={() => setIsProjectModalOpen(false)} class="px-4 py-2 text-slate-400 font-bold">Cancel</button>
-                                        <button type="submit" class="bg-indigo-600 text-white font-extrabold px-5 py-2 rounded-xl">Inject Tracker Node</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL: EDIT ACTIVE TASK FIELD */}
-                    {isEditModalOpen && (
-                        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
-                                <h3 class="text-sm font-bold text-slate-100 mb-4">✏️ Correct Task Metric Content</h3>
-                                <form onSubmit={saveEditedTaskName} class="space-y-4 text-xs">
-                                    <input type="text" required value={editTaskNameInput} onChange={(e) => setEditTaskNameInput(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 outline-none" />
-                                    <div class="flex gap-2 justify-end">
-                                        <button type="button" onClick={() => { setIsEditModalOpen(false); setEditTarget(null); }} class="px-3 py-1.5 text-slate-400 font-bold">Cancel</button>
-                                        <button type="submit" class="bg-indigo-600 text-white font-black px-4 py-1.5 rounded-xl">Save Changes</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL: LAUNCH PARALLEL SEGMENT TRACK */}
-                    {isParallelModalOpen && (
-                        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
-                                <h3 class="text-sm font-bold text-slate-100 mb-2"><i class="fa-solid fa-code-branch text-indigo-400 mr-1.5"></i>Deploy Simultaneous Stream</h3>
-                                <form onSubmit={executeParallelBranch} class="space-y-4 text-xs">
-                                    <select value={parallelAssignee} onChange={(e) => setParallelAssignee(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 font-bold">
-                                        {users.map(u => <option key={u} value={u}>{u}</option>)}
-                                    </select>
-                                    <div class="flex gap-2 justify-end">
-                                        <button type="button" onClick={() => setIsParallelModalOpen(false)} class="text-slate-400 font-bold px-3">Cancel</button>
-                                        <button type="submit" class="bg-indigo-600 text-white font-black px-4 py-1.5 rounded-xl">Deploy Simultaneous Track</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL: ROSTER TEAM ADMINISTRATION */}
-                    {isTeamModalOpen && (
-                        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-                                <div class="flex justify-between items-start mb-4">
-                                    <h3 class="text-base font-bold text-slate-100">Configure Active Roster</h3>
-                                    <button onClick={() => setIsTeamModalOpen(false)} class="text-slate-500 hover:text-slate-300"><i class="fa-solid fa-xmark"></i></button>
-                                </div>
-                                <form onSubmit={handleAddMember} class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 text-xs mb-4">
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <input type="text" required placeholder="Jose" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-slate-200" />
-                                        <input type="text" required placeholder="Animator" value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-slate-200" />
-                                    </div>
-                                    <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-2 rounded-lg">Register Member Profile</button>
-                                </form>
-                                <div class="max-h-40 overflow-y-auto space-y-2 pr-1 text-xs">
-                                    {users.map(u => (
-                                        <div key={u} class="flex justify-between items-center bg-slate-950/40 border border-slate-800 px-3 py-1.5 rounded-xl">
-                                            <span class="text-slate-300 font-medium">{u}</span>
-                                            <button onClick={() => handleRemoveMember(u)} class="text-slate-600 hover:text-rose-400 p-1"><i class="fa-solid fa-trash-can"></i></button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL: HAND-OFF RECIPIENT MANAGEMENT */}
-                    {isHandOffModalOpen && (
-                        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
-                                <h3 class="text-sm font-bold text-slate-100 mb-2">➡️ Hand-Off Sequential Task Track</h3>
-                                <form onSubmit={executeHandOff} class="space-y-4 text-xs">
-                                    <select value={nextAssignee} onChange={(e) => setNextAssignee(e.target.value)} class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 font-bold">
-                                        {users.map(u => <option key={u} value={u}>{u} {u === currentUser ? "(You)" : ""}</option>)}
-                                    </select>
-                                    <div class="flex gap-2 justify-end">
-                                        <button type="button" onClick={() => { setIsHandOffModalOpen(false); setHandOffTarget(null); }} class="text-slate-400 font-bold px-3">Cancel</button>
-                                        <button type="submit" class="bg-indigo-600 text-white font-black px-4 py-1.5 rounded-xl">Confirm & Transfer</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                </div>
+                            )
+                        );
+                    })
+                ),
+                activeTab === "level-view" && e("div", { class: "space-y-4" },
+                    allAvailableLevelsGlobal.map(lvl => {
+                        const projectsInLvl = projects.filter(p => !p.isArchived && p.level === lvl);
+                        if (projectsInLvl.length === 0) return null;
+                        return e("div", { key: lvl, class: "bg-slate-900 border border-slate-800 rounded-xl p-4" },
+                            e("h3", { class: "text-sm font-black text-indigo-400 mb-2 border-b border-slate-800 pb-1" }, `Level Cluster: ${lvl}`),
+                            e("div", { class: "grid gap-2 sm:grid-cols-2 text-xs" },
+                                projectsInLvl.map(p => e("div", { key: p.id, class: "bg-slate-950/40 p-3 rounded border border-slate-800/40" },
+                                    e("span", { class: "font-bold text-slate-100" }, `${p.series} • ${p.component}`),
+                                    e("p", { class: "text-[10px] text-slate-500 mt-1" }, p.tasks.map(t => t.assignee.split(" ")[0]).join(", "))
+                                ))
+                            )
+                        );
+                    })
+                ),
+                activeTab === "workload-view" && e("div", { class: "grid gap-4 md:grid-cols-2" },
+                    users.map(usr => {
+                        const userTasks = [];
+                        projects.forEach(p => { if (!p.isArchived) p.tasks.forEach(t => { if (t.assignee === usr) userTasks.push({ title: p.title, ...t }); }); });
+                        return e("div", { key: usr, class: "bg-slate-900 border border-slate-800 rounded-xl p-5" },
+                            e("h3", { class: "text-sm font-black text-slate-200 border-b border-slate-800 pb-2 mb-3" }, usr),
+                            userTasks.length === 0 ? e("p", { class: "text-xs text-slate-600 italic" }, "No active tasks.") :
+                            e("div", { class: "space-y-2 text-xs" },
+                                userTasks.map(tk => e("div", { key: tk.id, class: "bg-slate-950/60 p-2 rounded border border-slate-800" }, e("span", { class: "font-bold" }, tk.title), e("p", { class: "text-slate-400 text-[11px]" }, tk.name)))
+                            )
+                        );
+                    })
+                ),
+                isProjectModalOpen && e("div", { class: "fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50" },
+                    e("div", { class: "bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 text-xs space-y-3" },
+                        e("h3", { class: "text-sm font-bold text-slate-100" }, "Architect New Module"),
+                        e("form", { onSubmit: handleCreateProject, class: "space-y-3" },
+                            e("div", { class: "flex gap-4 bg-slate-950 p-2 rounded" },
+                                e("label", null, e("input", { type: "radio", checked: seriesCreationMode === "new", onChange: () => setSeriesCreationMode("new") }), " New Series"),
+                                e("label", null, e("input", { type: "radio", checked: seriesCreationMode === "existing", onChange: () => setSeriesCreationMode("existing"), disabled: existingSeriesList.length === 0 }), " Existing Series")
+                            ),
+                            seriesCreationMode === "new" ? e("input", { type: "text", required: true, placeholder: "Series ID (e.g. NCM)", value: newSeriesInput, onChange: (e) => setNewSeriesInput(e.target.value), class: "w-full bg-slate-950 border border-slate-800 p-2 rounded" }) :
+                            e("select", { value: selectedExistingSeries, onChange: (e) => setSelectedExistingSeries(e.target.value), class: "w-full bg-slate-950 border border-slate-800 p-2 rounded" }, existingSeriesList.map(x => e("option", { key: x, value: x }, x))),
+                            e("select", { value: selectedComponent, onChange: (e) => setSelectedComponent(e.target.value), class: "w-full bg-slate-950 border border-slate-800 p-2 rounded" }, COMPONENTS.map(c => e("option", { key: c, value: c }, c))),
+                            e("select", { value: selectedStage, onChange: (e) => setSelectedStage(e.target.value), class: "w-full bg-slate-950 border border-slate-800 p-2 rounded" }, STAGES.map(s => e("option", { key: s, value: s }, s))),
+                            e("select", { value: selectedLevel, onChange: (e) => setSelectedLevel(e.target.value), class: "w-full bg-slate-950 border border-slate-800 p-2 rounded" }, STAGE_LEVELS[selectedStage].map(l => e("option", { key: l, value: l }, l))),
+                            e("select", { value: firstAssignee, onChange: (e) => setFirstAssignee(e.target.value), class: "w-full bg-slate-950 border border-slate-800 p-2 rounded" }, users.map(u => e("option", { key: u, value: u }, u))),
+                            e("div", { class: "flex justify-end gap-2" },
+                                e("button", { type: "button", onClick: () => setIsProjectModalOpen(false) }, "Cancel"),
+                                e("button", { type: "submit", class: "bg-indigo-600 text-white px-4 py-1.5 rounded-lg font-bold" }, "Inject Node")
+                            )
+                        )
+                    )
+                ),
+                isHandOffModalOpen && e("div", { class: "fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50" },
+                    e("div", { class: "bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full text-xs" },
+                        e("h3", { class: "text-sm font-bold mb-3" }, "➡️ Hand-Off Task Owner"),
+                        e("form", { onSubmit: executeHandOff, class: "space-y-4" },
+                            e("select", { value: nextAssignee, onChange: (e) => setNextAssignee(e.target.value), class: "w-full bg-slate-950 border border-slate-800 p-2 rounded font-bold text-slate-200" }, users.map(u => e("option", { key: u, value: u }, u))),
+                            e("div", { class: "flex justify-end gap-2" }, e("button", { type: "button", onClick: () => setIsHandOffModalOpen(false) }, "Cancel"), e("button", { type: "submit", class: "bg-indigo-600 text-white px-4 py-1.5 rounded" }, "Confirm"))
+                        )
+                    )
+                ),
+                isParallelModalOpen && e("div", { class: "fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50" },
+                    e("div", { class: "bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full text-xs" },
+                        e("h3", { class: "text-sm font-bold mb-3" }, "Deploy Simultaneous Stream"),
+                        e("form", { onSubmit: executeParallelBranch, class: "space-y-4" },
+                            e("select", { value: parallelAssignee, onChange: (e) => setParallelAssignee(e.target.value), class: "w-full bg-slate-950 border border-slate-800 p-2 rounded" }, users.map(u => e("option", { key: u, value: u }, u))),
+                            e("div", { class: "flex justify-end gap-2" }, e("button", { type: "button", onClick: () => setIsParallelModalOpen(false) }, "Cancel"), e("button", { type: "submit", class: "bg-indigo-600 text-white px-4 py-1.5 rounded" }, "Deploy"))
+                        )
+                    )
+                ),
+                isEditModalOpen && e("div", { class: "fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50" },
+                    e("div", { class: "bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full text-xs" },
+                        e("h3", { class: "text-sm font-bold mb-3" }, "Correct Task Context"),
+                        e("form", { onSubmit: saveEditedTaskName, class: "space-y-4" },
+                            e("input", { type: "text", value: editTaskNameInput, onChange: (e) => setEditTaskNameInput(e.target.value), class: "w-full bg-slate-950 border border-slate-800 p-2 rounded" }),
+                            e("div", { class: "flex justify-end gap-2" }, e("button", { type: "button", onClick: () => setIsEditModalOpen(false) }, "Cancel"), e("button", { type: "submit", class: "bg-indigo-600 text-white px-4 py-1.5 rounded" }, "Save"))
+                        )
+                    )
+                ),
+                isTeamModalOpen && e("div", { class: "fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50" },
+                    e("div", { class: "bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-md w-full text-xs space-y-4" },
+                        e("h3", { class: "text-sm font-bold text-slate-100" }, "Configure Active Team Roster"),
+                        e("form", { onSubmit: handleAddMember, class: "space-y-2 bg-slate-950 p-3 rounded border border-slate-800" },
+                            e("div", { class: "grid grid-cols-2 gap-2" },
+                                e("input", { type: "text", required: true, placeholder: "Name", value: newMemberName, onChange: (e) => setNewMemberName(e.target.value), class: "bg-slate-900 border border-slate-800 p-2 rounded" }),
+                                e("input", { type: "text", required: true, placeholder: "Role", value: newMemberRole, onChange: (e) => setNewMemberRole(e.target.value), class: "bg-slate-900 border border-slate-800 p-2 rounded" })
+                            ),
+                            e("button", { type: "submit", class: "w-full bg-indigo-600 text-white py-1.5 rounded font-bold" }, "Register Member Profile")
+                        ),
+                        e("div", { class: "max-h-40 overflow-y-auto space-y-2" },
+                            users.map(u => e("div", { key: u, class: "flex justify-between items-center bg-slate-950/40 border border-slate-800 px-3 py-1.5 rounded-xl" },
+                                e("span", null, u),
+                                e("button", { onClick: () => handleRemoveMember(u), class: "text-slate-600 hover:text-rose-400" }, e("i", { class: "fa-solid fa-trash-can" }))
+                            ))
+                        ),
+                        e("div", { class: "flex justify-end" }, e("button", { onClick: () => setIsTeamModalOpen(false), class: "text-slate-400 font-bold" }, "Close"))
+                    )
+                )
             );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        root.render(e(App));
     </script>
 </body>
 </html>

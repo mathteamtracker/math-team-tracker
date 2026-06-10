@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Team Tracker (Ver 16.1 - Cloud Sync)</title>
+    <title>Math Team Tracker (Ver 16.2 - Cloud Sync)</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -421,7 +421,7 @@
                     <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-6 mb-8 gap-4">
                         <div>
                             <h1 class="text-3xl font-extrabold heading-font text-white tracking-tight flex items-center gap-2">
-                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 16.1</span>
+                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 16.2</span>
                             </h1>
                             <p class="text-slate-400 text-xs mt-0.5">Cloud-Synced Workflow Matrix</p>
                         </div>
@@ -820,20 +820,35 @@
                                             </span>
                                         </div>
                                         
-                                        <div class="space-y-1.5">
-                                            <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Historical Footprint Matrix:</span>
-                                            {p.history && p.history.map((h, i) => (
-                                                <div key={i} class="bg-slate-950/60 border border-slate-800/40 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
-                                                    <div>
-                                                        <span class="font-semibold text-slate-200">{h.name}</span>
-                                                        <span class="text-slate-400 text-[11px] block mt-0.5">Executor: {h.assignee}</span>
+                                        {/* Expandable History Log Layout */}
+                                        {p.history && p.history.length > 0 && (
+                                            <div class="pt-2 border-t border-slate-800/40 space-y-2">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => toggleTree('history', p.id)}
+                                                    class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-slate-200 transition"
+                                                >
+                                                    <i class={`fa-solid ${expandedHistory[p.id] ? 'fa-chevron-down text-indigo-400' : 'fa-chevron-right text-slate-500'} text-[10px]`}></i>
+                                                    History Log ({p.history.length})
+                                                </button>
+                                                
+                                                {expandedHistory[p.id] && (
+                                                    <div class="space-y-1.5 pl-2">
+                                                        {p.history.map((h, i) => (
+                                                            <div key={i} class="bg-slate-950/60 border border-slate-800/40 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
+                                                                <div>
+                                                                    <span class="font-semibold text-slate-200">{h.name}</span>
+                                                                    <span class="text-slate-400 text-[11px] block mt-0.5">Executor: {h.assignee}</span>
+                                                                </div>
+                                                                <span class="text-slate-400 font-mono text-[11px] shrink-0">
+                                                                    {h.endDate ? h.endDate.split(',')[0] : "Closed Cycle"}
+                                                                </span>
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                    <span class="text-slate-400 font-mono text-[11px] shrink-0">
-                                                        {h.endDate ? h.endDate.split(',')[0] : "Closed Cycle"}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 ))
                             )}

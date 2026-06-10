@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Team Tracker (Ver 16.2 - Cloud Sync)</title>
+    <title>Math Team Tracker (Ver 16.3 - Cloud Sync)</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -421,7 +421,7 @@
                     <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-6 mb-8 gap-4">
                         <div>
                             <h1 class="text-3xl font-extrabold heading-font text-white tracking-tight flex items-center gap-2">
-                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 16.2</span>
+                                Math Team Tracker<span class="text-indigo-400">.</span><span class="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 16.3</span>
                             </h1>
                             <p class="text-slate-400 text-xs mt-0.5">Cloud-Synced Workflow Matrix</p>
                         </div>
@@ -812,7 +812,12 @@
                                     <div key={p.id} class="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
                                         <div class="flex justify-between items-start border-b border-slate-800 pb-3 mb-3">
                                             <div>
-                                                <h3 class="text-sm font-bold text-slate-200">📚 {p.title}</h3>
+                                                <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                                                    <span>📚 {p.title}</span>
+                                                    <span class={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase ${getStageBadgeStyle(p.stageColor || 'Red')}`}>
+                                                        {p.stageColor || 'Red'}
+                                                    </span>
+                                                </h3>
                                                 <p class="text-[10px] text-slate-500 mt-0.5">ID Reference: {p.id}</p>
                                             </div>
                                             <span class="bg-emerald-950/80 text-emerald-400 border border-emerald-900/50 text-[9px] font-black px-2.5 py-0.5 rounded-md uppercase">

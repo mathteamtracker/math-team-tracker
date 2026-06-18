@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Manuscript Tracker (Ver 20 - Sorted Archive and Main Badges)</title>
+    <title>Math Manuscript Tracker (Ver 17.1 - Sorted Archive & Main Badges)</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -110,7 +110,7 @@
                 } else if (diffDays <= 10) {
                     return <span className="text-rose-400 font-black ml-1.5 bg-rose-950/30 px-1.5 py-0.5 rounded border border-rose-900/30 text-[9px] flex items-center shrink-0"><i className="fa-solid fa-circle-exclamation mr-1"></i>HIGH</span>;
                 } else if (diffDays <= 20) {
-                    return <span className="text-yellow-400 font-black ml-1.5 bg-yellow-950/30 px-1.5 py-0.5 rounded border border-yellow-900/30 text-[9px] flex items-center shrink-0"><i className="fa-solid fa-bolt mr-1"></i>MID</span>;
+                    return <span className="text-yellow-400 font-black ml-1.5 bg-yellow-950/30 px-1.5 py-0.5 rounded border border-yellow-900/30 text-[9px] flex items-center shrink-0"><i className="fa-solid fa-bold mr-1"></i>MID</span>;
                 } else {
                     return <span className="text-emerald-400 font-black ml-1.5 bg-emerald-950/30 px-1.5 py-0.5 rounded border border-emerald-900/30 text-[9px] flex items-center shrink-0"><i className="fa-solid fa-circle-check mr-1"></i>LOW</span>;
                 }
@@ -468,7 +468,7 @@
                     <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-6 mb-8 gap-4">
                         <div>
                             <h1 className="text-3xl font-extrabold heading-font text-white tracking-tight flex items-center gap-2">
-                                Math Manuscript Tracker<span className="text-indigo-400">.</span><span className="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 20</span>
+                                Math Manuscript Tracker<span className="text-indigo-400">.</span><span className="text-xs bg-slate-800 text-slate-400 font-mono px-1.5 py-0.5 rounded">Ver 17.1</span>
                             </h1>
                             <p className="text-slate-400 text-xs mt-0.5">Cloud-Synced Workflow Matrix</p>
                         </div>
@@ -778,7 +778,7 @@
                                                                                     {p.tasks.map(t => (
                                                                                         <div key={t.id} className="flex items-center justify-between text-[10px] bg-slate-900/60 p-1.5 rounded border border-slate-800/30 gap-1">
                                                                                             <div className="flex flex-col truncate max-w-[55%]">
-                                                                                                <span className="text-slate-300 truncate">{t.name}</span>
+                                                                                                <span className="text-slate-300 truncate">t.name</span>
                                                                                                 <div className="flex flex-col gap-0.5 mt-0.5">
                                                                                                     <span className="text-[8px] text-slate-400 font-medium"><i className="fa-solid fa-calendar-days mr-0.5 text-slate-500"></i> {t.deadline || "No DL"}</span>
                                                                                                     {getPriorityBadge(t.deadline)}
